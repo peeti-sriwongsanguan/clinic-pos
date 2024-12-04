@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beauty Clinic Invoice</title>
+    <style>
+        :root {
+            --primary-pink: #FFE4E8;
+            --secondary-pink: #FFB6C1;
+            --dark-pink: #FF69B4;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            max-width: 200px;
+            margin-bottom: 20px;
+        }
+        .invoice-details {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .table th {
+            background-color: var(--secondary-pink);
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        .table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        .total {
+            text-align: right;
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="header">
+            <img src="{{ logo_url }}" alt="Beauty Clinic Logo" class="logo">
+            <h1>{{ company_name }}</h1>
+            <p>{{ company_address }}</p>
+            <p>Tel: {{ company_phone }} | Email: {{ company_email }}</p>
+        </div>
+
+        <div class="invoice-details">
+            <div>
+                <h2>Invoice To:</h2>
+                <p>{{ client_name }}</p>
+                <p>{{ client_phone }}</p>
+                <p>{{ client_email }}</p>
+            </div>
+            <div>
+                <h2>Invoice Details:</h2>
+                <p>Invoice #: {{ invoice_number }}</p>
+                <p>Date: {{ invoice_date }}</p>
+                <p>Due Date: {{ due_date }}</p>
+            </div>
+        </div>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.service }}</td>
+                    <td>{{ item.description }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>${{ item.price }}</td>
+                    <td>${{ item.total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="total">
+            <p>Subtotal: ${{ subtotal }}</p>
+            <p>Tax ({{ tax_rate }}%): ${{ tax_amount }}</p>
+            <p>Total: ${{ total }}</p>
+        </div>
+
+        <div class="footer">
+            <p>{{ footer_text }}</p>
+            <p>Thank you for choosing {{ company_name }}</p>
+        </div>
+    </div>
+</body>
+</html>

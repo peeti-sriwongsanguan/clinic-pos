@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beauty Clinic Receipt</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 10px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .receipt {
+            width: 80mm;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            max-width: 60mm;
+            margin-bottom: 10px;
+        }
+        .divider {
+            border-top: 1px dashed #000;
+            margin: 10px 0;
+        }
+        .items {
+            margin: 15px 0;
+        }
+        .item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .total {
+            margin-top: 15px;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 10px;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt">
+        <div class="header">
+            <img src="{{ logo_url }}" alt="Beauty Clinic Logo" class="logo">
+            <h2>{{ company_name }}</h2>
+            <p>{{ company_address }}</p>
+            <p>Tel: {{ company_phone }}</p>
+            <p>{{ company_email }}</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="transaction-info">
+            <p>Receipt #: {{ receipt_number }}</p>
+            <p>Date: {{ transaction_date }}</p>
+            <p>Time: {{ transaction_time }}</p>
+            <p>Client: {{ client_name }}</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="items">
+            {% for item in items %}
+            <div class="item">
+                <span>{{ item.service }}</span>
+                <span>{{ item.quantity }}x</span>
+                <span>${{ item.price }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="total">
+            <div class="item">
+                <span>Subtotal:</span>
+                <span>${{ subtotal }}</span>
+            </div>
+            <div class="item">
+                <span>Tax ({{ tax_rate }}%):</span>
+                <span>${{ tax_amount }}</span>
+            </div>
+            <div class="item">
+                <strong>Total:</strong>
+                <strong>${{ total }}</strong>
+            </div>
+            <div class="item">
+                <span>Payment Method:</span>
+                <span>{{ payment_method }}</span>
+            </div>
+        </div>
+
+        <div class="qr-code">
+            <img src="{{ qr_code }}" alt="Receipt QR Code">
+        </div>
+
+        <div class="footer">
+            <p>{{ footer_text }}</p>
+            <p>** Thank you for your visit **</p>
+            <p>Follow us on social media:</p>
+            <p>{{ social_media_handles }}</p>
+        </div>
+    </div>
+</body>
+</html>

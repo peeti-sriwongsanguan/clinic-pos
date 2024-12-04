@@ -1,0 +1,12 @@
+.form-control {
+    border-radius: 5px;
+    border: 1px solid var(--secondary-pink);
+    padding: 8px 12px;
+    margin: 5px 0;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--dark-pink);
+    box-shadow: 0 0 5px rgba(255, 105, 180, 0.3);
+}

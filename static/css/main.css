@@ -1,0 +1,23 @@
+:root {
+    --primary-pink: #FFE4E8;
+    --secondary-pink: #FFB6C1;
+    --dark-pink: #FF69B4;
+    --white: #FFFFFF;
+    --gray: #666666;
+
+    /* Typography */
+    --font-main: 'Helvetica', sans-serif;
+    --font-size-small: 12px;
+    --font-size-medium: 14px;
+    --font-size-large: 16px;
+    --font-size-xlarge: 20px;
+}
+
+/* Global styles */
+body {
+    font-family: var(--font-main);
+    background-color: var(--white);
+    color: var(--gray);
+    margin: 0;
+    padding: 0;
+}
