@@ -4,6 +4,7 @@ from PIL import Image, ImageTk
 import os
 from datetime import datetime
 from decimal import Decimal
+from datetime import datetime, timedelta
 import logging
 
 from app.gui.theme_config import ThemeConfig
@@ -392,12 +393,7 @@ class BeautyClinicPOS:
         # Add a test label to see if window appears
         test_label = tk.Label(self.root, text="Beauty Clinic POS is starting...", font=('Helvetica', 16))
         test_label.pack(pady=20)
-    def setup_window(self):
-        self.root.title("Beauty Clinic POS")
-        self.root.geometry("1280x800")
-        self.root.configure(bg=ThemeConfig.PRIMARY_PINK)
-        self.root.grid_columnconfigure(0, weight=1)
-        self.root.grid_rowconfigure(0, weight=1)
+
 
     def setup_branding(self):
         # Create header frame
@@ -590,6 +586,7 @@ class BeautyClinicPOS:
         self.update_cart_display()
         self.refresh_patient_list()
         self.refresh_services_list()
+
     def setup_gui(self):
         # Create main notebook for tabs
         self.notebook = ttk.Notebook(self.root)
@@ -598,23 +595,32 @@ class BeautyClinicPOS:
         # Create different tabs
         self.pos_tab = ttk.Frame(self.notebook)
         self.patients_tab = ttk.Frame(self.notebook)
+        self.treatments_tab = ttk.Frame(self.notebook)
+        self.doctor_notes_tab = ttk.Frame(self.notebook)
         self.services_tab = ttk.Frame(self.notebook)
-        self.reports_tab = ttk.Frame(self.notebook)
         self.appointments_tab = ttk.Frame(self.notebook)
+        self.reports_tab = ttk.Frame(self.notebook)
+        self.settings_tab = ttk.Frame(self.notebook)
 
-        # Add tabs to notebook
-        self.notebook.add(self.pos_tab, text="POS")
-        self.notebook.add(self.patients_tab, text="Patients")
-        self.notebook.add(self.services_tab, text="Services")
-        self.notebook.add(self.appointments_tab, text="Appointments")
-        self.notebook.add(self.reports_tab, text="Reports")
+        # Add tabs with language support
+        self.notebook.add(self.pos_tab, text=self.lang.get_text("pos"))
+        self.notebook.add(self.patients_tab, text=self.lang.get_text("patients"))
+        self.notebook.add(self.treatments_tab, text=self.lang.get_text("treatments"))
+        self.notebook.add(self.doctor_notes_tab, text=self.lang.get_text("doctor_notes"))
+        self.notebook.add(self.services_tab, text=self.lang.get_text("services"))
+        self.notebook.add(self.appointments_tab, text=self.lang.get_text("appointments"))
+        self.notebook.add(self.reports_tab, text=self.lang.get_text("reports"))
+        self.notebook.add(self.settings_tab, text=self.lang.get_text("settings"))
 
         # Setup each tab
         self.setup_pos_tab()
         self.setup_patients_tab()
+        self.setup_treatments_tab()
+        self.setup_doctor_notes_tab()
         self.setup_services_tab()
         self.setup_appointments_tab()
         self.setup_reports_tab()
+        self.setup_settings_tab()
 
     def setup_pos_tab(self):
         # Left frame for patient selection and services
@@ -995,8 +1001,297 @@ class BeautyClinicPOS:
         self.cart_items = []
         self.update_cart_display()
 
-    def calculate_total(self) -> Decimal:
-        return sum(item.price * item.quantity for item in self.cart_items)
+    def setup_pos_tab(self):
+        """Setup enhanced POS tab with multilingual support"""
+        # Create main containers
+        left_frame = ttk.Frame(self.pos_tab)
+        left_frame.pack(side='left', fill='both', expand=True, padx=5, pady=5)
+
+        right_frame = ttk.Frame(self.pos_tab)
+        right_frame.pack(side='right', fill='both', padx=5, pady=5)
+
+        # === Left Side ===
+        # Patient Selection Section
+        patient_frame = ttk.LabelFrame(
+            left_frame,
+            text=self.lang.get_text("patient_info")
+        )
+        patient_frame.pack(fill='x', padx=5, pady=5)
+
+        # Patient Search
+        search_frame = ttk.Frame(patient_frame)
+        search_frame.pack(fill='x', padx=5, pady=5)
+
+        ttk.Label(
+            search_frame,
+            text=self.lang.get_text("search_patient")
+        ).pack(side='left', padx=5)
+
+        self.patient_search_var = tk.StringVar()
+        self.patient_search_var.trace('w', self.on_patient_search)
+        search_entry = ttk.Entry(
+            search_frame,
+            textvariable=self.patient_search_var
+        )
+        search_entry.pack(side='left', fill='x', expand=True, padx=5)
+
+        # Quick add patient button
+        ttk.Button(
+            search_frame,
+            text=self.lang.get_text("add_new_patient"),
+            command=self.show_add_patient_form,
+            style="Custom.TButton"
+        ).pack(side='right', padx=5)
+
+        # Patient info display
+        self.patient_info_frame = ttk.Frame(patient_frame)
+        self.patient_info_frame.pack(fill='x', padx=5, pady=5)
+
+        # Services Section with Categories
+        services_frame = ttk.LabelFrame(
+            left_frame,
+            text=self.lang.get_text("services")
+        )
+        services_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Service categories buttons
+        categories_frame = ttk.Frame(services_frame)
+        categories_frame.pack(fill='x', padx=5, pady=5)
+
+        categories = [
+            "anti_aging", "facial", "body", "skin_care"
+        ]
+
+        for category in categories:
+            ttk.Button(
+                categories_frame,
+                text=self.lang.get_text(f"category_{category}"),
+                command=lambda c=category: self.filter_services(c)
+            ).pack(side='left', padx=2)
+
+        # Services list
+        self.services_list = ttk.Treeview(
+            services_frame,
+            columns=('name', 'price', 'duration', 'doctor'),
+            show='headings'
+        )
+
+        # Configure columns
+        self.services_list.heading('name', text=self.lang.get_text("service_name"))
+        self.services_list.heading('price', text=self.lang.get_text("price"))
+        self.services_list.heading('duration', text=self.lang.get_text("duration"))
+        self.services_list.heading('doctor', text=self.lang.get_text("doctor"))
+
+        self.services_list.pack(fill='both', expand=True, padx=5, pady=5)
+        self.services_list.bind('<Double-1>', self.add_service_to_cart)
+
+        # === Right Side ===
+        # Cart Section
+        cart_frame = ttk.LabelFrame(
+            right_frame,
+            text=self.lang.get_text("cart")
+        )
+        cart_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Cart list
+        self.cart_list = ttk.Treeview(
+            cart_frame,
+            columns=('service', 'doctor', 'quantity', 'price', 'total'),
+            show='headings'
+        )
+
+        # Configure cart columns
+        self.cart_list.heading('service', text=self.lang.get_text("service"))
+        self.cart_list.heading('doctor', text=self.lang.get_text("doctor"))
+        self.cart_list.heading('quantity', text=self.lang.get_text("quantity"))
+        self.cart_list.heading('price', text=self.lang.get_text("price"))
+        self.cart_list.heading('total', text=self.lang.get_text("total"))
+
+        self.cart_list.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Cart controls
+        cart_controls = ttk.Frame(cart_frame)
+        cart_controls.pack(fill='x', padx=5, pady=5)
+
+        ttk.Button(
+            cart_controls,
+            text=self.lang.get_text("remove_selected"),
+            command=self.remove_from_cart
+        ).pack(side='left', padx=5)
+
+        ttk.Button(
+            cart_controls,
+            text=self.lang.get_text("clear_cart"),
+            command=self.clear_cart
+        ).pack(side='left', padx=5)
+
+        # Totals display
+        totals_frame = ttk.Frame(cart_frame)
+        totals_frame.pack(fill='x', padx=5, pady=5)
+
+        # Subtotal
+        ttk.Label(
+            totals_frame,
+            text=self.lang.get_text("subtotal")
+        ).pack(side='left')
+
+        self.subtotal_var = tk.StringVar(value="฿0.00")
+        ttk.Label(
+            totals_frame,
+            textvariable=self.subtotal_var
+        ).pack(side='left', padx=5)
+
+        # Payment Section
+        payment_frame = ttk.LabelFrame(
+            right_frame,
+            text=self.lang.get_text("payment")
+        )
+        payment_frame.pack(fill='x', padx=5, pady=5)
+
+        # Payment method
+        ttk.Label(
+            payment_frame,
+            text=self.lang.get_text("payment_method")
+        ).pack(padx=5, pady=2)
+
+        self.payment_method = ttk.Combobox(
+            payment_frame,
+            values=[
+                self.lang.get_text("cash"),
+                self.lang.get_text("credit_card"),
+                self.lang.get_text("transfer")
+            ],
+            state='readonly'
+        )
+        self.payment_method.pack(fill='x', padx=5, pady=2)
+
+        # Process payment button
+        ttk.Button(
+            payment_frame,
+            text=self.lang.get_text("process_payment"),
+            command=self.process_payment,
+            style="Custom.TButton"
+        ).pack(fill='x', padx=5, pady=5)
+
+    def add_service_to_cart(self, event=None):
+        """Enhanced add to cart with doctor selection"""
+        selection = self.services_list.selection()
+        if not selection:
+            return
+
+        service_id = self.services_list.item(selection[0])['values'][0]
+
+        # Show doctor selection dialog
+        doctor = self.select_doctor_dialog(service_id)
+        if not doctor:
+            return
+
+        service = self.db.get_service(service_id)
+        if service:
+            item = TransactionItem(
+                id="",
+                transaction_id="",
+                service_id=service_id,
+                doctor_id=doctor.id,
+                quantity=1,
+                price=service.price
+            )
+            self.cart_items.append(item)
+            self.update_cart_display()
+
+    def select_doctor_dialog(self, service_id):
+        """Show dialog to select doctor for service"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(self.lang.get_text("select_doctor"))
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Get available doctors for this service
+        doctors = self.db.get_doctors_for_service(service_id)
+        selected_doctor = None
+
+        def on_select():
+            nonlocal selected_doctor
+            selection = doctors_list.curselection()
+            if selection:
+                selected_doctor = doctors[selection[0]]
+                dialog.destroy()
+
+        # Create doctors list
+        doctors_list = tk.Listbox(dialog, height=6)
+        doctors_list.pack(padx=10, pady=5, fill='both', expand=True)
+
+        for doctor in doctors:
+            doctors_list.insert(tk.END, doctor.name)
+
+        # Buttons
+        buttons_frame = ttk.Frame(dialog)
+        buttons_frame.pack(fill='x', padx=10, pady=5)
+
+        ttk.Button(
+            buttons_frame,
+            text=self.lang.get_text("select"),
+            command=on_select
+        ).pack(side='right', padx=5)
+
+        ttk.Button(
+            buttons_frame,
+            text=self.lang.get_text("cancel"),
+            command=dialog.destroy
+        ).pack(side='right', padx=5)
+
+        dialog.wait_window()
+        return selected_doctor
+
+    def process_payment(self):
+        """Enhanced payment processing with appointment creation"""
+        if not self.current_patient or not self.cart_items:
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("select_patient_and_services")
+            )
+            return
+
+        try:
+            # Create transaction
+            transaction = Transaction(
+                id="",
+                patient_id=self.current_patient.id,
+                total_amount=self.calculate_total(),
+                payment_method=self.payment_method.get(),
+                transaction_date=datetime.now(),
+                status="completed",
+                items=self.cart_items
+            )
+
+            # Save to database
+            transaction_id = self.db.create_transaction(transaction)
+
+            # Create appointments for each service
+            for item in self.cart_items:
+                self.create_appointment(
+                    patient_id=self.current_patient.id,
+                    service_id=item.service_id,
+                    doctor_id=item.doctor_id
+                )
+
+            # Generate invoice
+            self.generate_invoice(transaction_id)
+
+            # Clear cart
+            self.clear_cart()
+
+            messagebox.showinfo(
+                "Success",
+                self.lang.get_text("payment_successful")
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing payment: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("payment_error")
+            )
 
     def refresh_patient_list(self):
         self.patient_list.delete(*self.patient_list.get_children())
@@ -1018,6 +1313,109 @@ class BeautyClinicPOS:
                 f"{service.duration} mins",
                 service.category
             ))
+
+    def filter_services(self, category):
+        """Filter services list by category"""
+        try:
+            services = self.db.get_services_by_category(category)
+            self.services_list.delete(*self.services_list.get_children())
+
+            for service in services:
+                self.services_list.insert('', 'end', values=(
+                    service.id,  # Hidden ID
+                    service.name,
+                    f"฿{service.price:,.2f}",
+                    f"{service.duration} mins"
+                ))
+        except Exception as e:
+            logger.error(f"Error filtering services: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_filtering_services")
+            )
+
+    def remove_from_cart(self):
+        """Remove selected item from cart"""
+        selection = self.cart_list.selection()
+        if not selection:
+            return
+
+        try:
+            for item in selection:
+                item_values = self.cart_list.item(item)['values']
+                # Find and remove the corresponding cart item
+                self.cart_items = [i for i in self.cart_items if i.service_id != item_values[0]]
+
+            self.update_cart_display()
+        except Exception as e:
+            logger.error(f"Error removing item from cart: {e}")
+
+    def update_cart_display(self):
+        """Update the cart display with current items"""
+        try:
+            self.cart_list.delete(*self.cart_list.get_children())
+            total = Decimal('0')
+
+            for item in self.cart_items:
+                service = self.db.get_service(item.service_id)
+                doctor = self.db.get_staff(item.doctor_id)
+                item_total = item.price * item.quantity
+                total += item_total
+
+                self.cart_list.insert('', 'end', values=(
+                    service.name,
+                    doctor.name if doctor else '',
+                    item.quantity,
+                    f"฿{item.price:,.2f}",
+                    f"฿{item_total:,.2f}"
+                ))
+
+            self.subtotal_var.set(f"฿{total:,.2f}")
+        except Exception as e:
+            logger.error(f"Error updating cart display: {e}")
+
+    def create_appointment(self, patient_id: str, service_id: str, doctor_id: str):
+        """Create an appointment for the service"""
+        try:
+            service = self.db.get_service(service_id)
+            current_time = datetime.now()
+
+            # Find next available slot
+            appointment = {
+                'patient_id': patient_id,
+                'service_id': service_id,
+                'doctor_id': doctor_id,
+                'start_time': current_time,  # You might want to implement proper scheduling
+                'end_time': current_time + timedelta(minutes=service.duration),
+                'status': 'scheduled'
+            }
+
+            self.db.create_appointment(appointment)
+        except Exception as e:
+            logger.error(f"Error creating appointment: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_creating_appointment")
+            )
+
+    def calculate_total(self) -> Decimal:
+        """Calculate total amount for all items in cart"""
+        return sum(item.price * item.quantity for item in self.cart_items)
+
+    def setup_treatments_tab(self):
+        """Setup treatments tracking tab"""
+        # Will implement later
+        pass
+
+    def setup_doctor_notes_tab(self):
+        """Setup doctor's notes interface"""
+        # Will implement later
+        pass
+
+    def setup_settings_tab(self):
+        """Setup settings and configuration tab"""
+        # Will implement later
+        pass
 
     def run(self):
         self.root.mainloop()
