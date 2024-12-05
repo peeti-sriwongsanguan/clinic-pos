@@ -18,11 +18,11 @@ class BeautyClinicPOS:
     def __init__(self):
         logger.debug("Initializing BeautyClinicPOS...")
 
-        # Initialize database first
+        # Initialize database and language manager first
         try:
             logger.debug("Initializing database connection...")
             self.db = DatabaseManager()
-            self.lang = LanguageManager(self.db)  # Add this line
+            self.lang = LanguageManager(self.db)
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             messagebox.showerror("Database Error",
@@ -36,13 +36,20 @@ class BeautyClinicPOS:
         try:
             # Initialize other components
             self.invoice_generator = InvoiceGenerator()
+
+            # Setup window appearance
             self.setup_window()
-            self.setup_header()  # Add this line
-            self.setup_branding()
             self.create_styles()
+
+            # Setup UI components in correct order
+            self.setup_header()
+            self.setup_branding()
             self.setup_gui()
+
+            # Initialize state variables
             self.current_patient = None
             self.cart_items = []
+
             logger.debug("Successfully initialized BeautyClinicPOS")
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
@@ -375,11 +382,12 @@ class BeautyClinicPOS:
         except Exception as e:
             logger.error(f"Error updating patient display: {e}")
 
-
     def setup_window(self):
-        logger.debug("Configuring window properties...")
         self.root.title("Beauty Clinic POS")
         self.root.geometry("1280x800")
+        self.root.configure(bg=ThemeConfig.PRIMARY_PINK)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
 
         # Add a test label to see if window appears
         test_label = tk.Label(self.root, text="Beauty Clinic POS is starting...", font=('Helvetica', 16))
@@ -441,7 +449,13 @@ class BeautyClinicPOS:
     def create_styles(self):
         style = ttk.Style()
 
-        # Add new styles
+        # Main theme
+        style.configure(
+            "Custom.TFrame",
+            background=ThemeConfig.PRIMARY_PINK
+        )
+
+        # Header styles
         style.configure(
             "Header.TFrame",
             background=ThemeConfig.WHITE
@@ -458,12 +472,6 @@ class BeautyClinicPOS:
             "Header.TLabel",
             background=ThemeConfig.WHITE,
             font=ThemeConfig.MAIN_FONT
-        )
-
-        # Configure main theme
-        style.configure(
-            "Custom.TFrame",
-            background=ThemeConfig.PRIMARY_PINK
         )
 
         # Button style
@@ -489,6 +497,99 @@ class BeautyClinicPOS:
             font=ThemeConfig.MAIN_FONT
         )
 
+    def setup_header(self):
+        """Setup header with logo and language selection"""
+        header_frame = ttk.Frame(self.root, style='Header.TFrame')
+        header_frame.pack(fill='x', padx=10, pady=5)
+
+        # Left side - Logo and clinic name
+        left_frame = ttk.Frame(header_frame)
+        left_frame.pack(side='left', fill='y')
+
+        try:
+            logo_path = os.path.join('static', 'assets', 'logo.jpeg')
+            logo_img = Image.open(logo_path)
+            logo_height = 60
+            aspect_ratio = logo_img.width / logo_img.height
+            logo_width = int(logo_height * aspect_ratio)
+            logo_img = logo_img.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+
+            self.logo_photo = ImageTk.PhotoImage(logo_img)
+            logo_label = ttk.Label(left_frame, image=self.logo_photo, background=ThemeConfig.WHITE)
+            logo_label.pack(side='left', padx=5)
+        except Exception as e:
+            logger.error(f"Error loading logo: {e}")
+
+        # Clinic name
+        clinic_label = ttk.Label(
+            left_frame,
+            text="Wellness by BFF",
+            style='ClinicName.TLabel'
+        )
+        clinic_label.pack(side='left', padx=10)
+
+        # Right side - Controls
+        right_frame = ttk.Frame(header_frame)
+        right_frame.pack(side='right', fill='y')
+
+        # Language selection
+        lang_frame = ttk.Frame(right_frame)
+        lang_frame.pack(side='right', padx=10)
+
+        ttk.Label(
+            lang_frame,
+            text=self.lang.get_text("language"),
+            style='Header.TLabel'
+        ).pack(side='left')
+
+        self.lang_var = tk.StringVar(value='en')
+        lang_combo = ttk.Combobox(
+            lang_frame,
+            textvariable=self.lang_var,
+            values=['en', 'th'],
+            state='readonly',
+            width=10
+        )
+        lang_combo.pack(side='left', padx=5)
+        lang_combo.bind('<<ComboboxSelected>>', self.change_language)
+
+        # User info/login
+        user_frame = ttk.Frame(right_frame)
+        user_frame.pack(side='right', padx=10)
+
+    def change_language(self, event=None):
+        """Handle language change"""
+        new_lang = self.lang_var.get()
+        self.lang.set_language(new_lang)
+        self.update_ui_texts()
+
+    def update_ui_texts(self):
+        """Update all UI texts after language change"""
+        # Update tab texts
+        tab_texts = {
+            0: "pos",
+            1: "patients",
+            2: "treatments",
+            3: "doctor_notes",
+            4: "services",
+            5: "appointments",
+            6: "reports",
+            7: "settings"
+        }
+
+        for index, text_key in tab_texts.items():
+            self.notebook.tab(index, text=self.lang.get_text(text_key))
+
+        # Update other UI elements
+        self.refresh_all_displays()
+
+    def refresh_all_displays(self):
+        """Refresh all displays after language change"""
+        if hasattr(self, 'current_patient') and self.current_patient:
+            self.update_patient_display()
+        self.update_cart_display()
+        self.refresh_patient_list()
+        self.refresh_services_list()
     def setup_gui(self):
         # Create main notebook for tabs
         self.notebook = ttk.Notebook(self.root)
