@@ -1727,6 +1727,205 @@ class BeautyClinicPOS:
             command=self.print_doctor_notes
         ).pack(side='right', padx=5)
 
+    def print_treatment_record(self):
+        """Print treatment record as PDF"""
+        selection = self.treatment_history_tree.selection()
+        if not selection:
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_treatment_first")
+            )
+            return
+
+        try:
+            item = self.treatment_history_tree.item(selection[0])
+            treatment_date = item['values'][0]
+            treatment = self.db.get_treatment_details(treatment_date)
+
+            # Generate PDF
+            filename = f"treatment_record_{treatment_date}.pdf"
+            self.generate_treatment_pdf(treatment, filename)
+
+            messagebox.showinfo(
+                "Success",
+                self.lang.get_text("treatment_printed")
+            )
+        except Exception as e:
+            logger.error(f"Error printing treatment record: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_printing_treatment")
+            )
+
+    def generate_treatment_pdf(self, treatment, filename):
+        """Generate PDF for treatment record"""
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+        doc = SimpleDocTemplate(
+            filename,
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72
+        )
+
+        # Build the document
+        story = []
+        styles = getSampleStyleSheet()
+
+        # Add clinic logo and info
+        try:
+            logo_path = os.path.join('static', 'assets', 'logo.jpeg')
+            if os.path.exists(logo_path):
+                img = Image(logo_path, width=200, height=100)
+                story.append(img)
+        except Exception as e:
+            logger.error(f"Error adding logo to PDF: {e}")
+
+        # Add clinic name and header
+        story.append(Paragraph("Treatment Record", styles['Title']))
+        story.append(Spacer(1, 12))
+
+        # Add treatment details
+        details = [
+            ("Date:", treatment.treatment_date.strftime("%Y-%m-%d")),
+            ("Patient:", treatment.patient_name),
+            ("Doctor:", treatment.doctor_name),
+            ("Service:", treatment.service_name)
+        ]
+
+        for label, value in details:
+            text = f"<b>{label}</b> {value}"
+            story.append(Paragraph(text, styles['Normal']))
+
+        story.append(Spacer(1, 12))
+
+        # Add treatment notes sections
+        sections = [
+            ('Chief Complaint', treatment.chief_complaint),
+            ('Diagnosis', treatment.diagnosis),
+            ('Treatment Plan', treatment.treatment_plan),
+            ('Notes', treatment.notes),
+            ('Follow-up', treatment.follow_up)
+        ]
+
+        for title, content in sections:
+            story.append(Paragraph(title, styles['Heading2']))
+            story.append(Paragraph(content or "N/A", styles['Normal']))
+            story.append(Spacer(1, 12))
+
+        # Build PDF
+        doc.build(story)
+
+    def add_treatment_photo(self, photo_type):
+        """Add before/after photo to treatment"""
+        from tkinter import filedialog
+
+        selection = self.treatment_history_tree.selection()
+        if not selection:
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_treatment_first")
+            )
+            return
+
+        try:
+            # Get photo file
+            filetypes = [
+                ('Image files', '*.jpg *.jpeg *.png'),
+                ('All files', '*.*')
+            ]
+            filename = filedialog.askopenfilename(
+                title=self.lang.get_text("select_photo"),
+                filetypes=filetypes
+            )
+
+            if filename:
+                # Save photo to storage and update database
+                treatment_id = self.treatment_history_tree.item(selection[0])['values'][0]
+                photo_path = self.save_treatment_photo(filename, treatment_id, photo_type)
+                self.db.update_treatment_photo(treatment_id, photo_type, photo_path)
+
+                # Update display
+                self.load_treatment_details()
+
+        except Exception as e:
+            logger.error(f"Error adding treatment photo: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_adding_photo")
+            )
+
+    def save_treatment_photo(self, source_path, treatment_id, photo_type):
+        """Save treatment photo to storage"""
+        from PIL import Image
+        import shutil
+
+        try:
+            # Create photos directory if it doesn't exist
+            photos_dir = os.path.join('static', 'photos', 'treatments', treatment_id)
+            os.makedirs(photos_dir, exist_ok=True)
+
+            # Generate destination path
+            file_ext = os.path.splitext(source_path)[1]
+            dest_filename = f"{photo_type}{file_ext}"
+            dest_path = os.path.join(photos_dir, dest_filename)
+
+            # Copy and optimize photo
+            with Image.open(source_path) as img:
+                # Resize if too large
+                max_size = (1200, 1200)
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                # Save optimized version
+                img.save(dest_path, quality=85, optimize=True)
+
+            return dest_path
+
+        except Exception as e:
+            logger.error(f"Error saving treatment photo: {e}")
+            raise
+
+    def update_treatment_photos(self, treatment):
+        """Update photo displays for treatment"""
+        try:
+            # Update before photo
+            if treatment.before_photo:
+                self.display_treatment_photo(treatment.before_photo, self.before_photo_label)
+            else:
+                self.before_photo_label.config(text="No photo")
+
+            # Update after photo
+            if treatment.after_photo:
+                self.display_treatment_photo(treatment.after_photo, self.after_photo_label)
+            else:
+                self.after_photo_label.config(text="No photo")
+
+        except Exception as e:
+            logger.error(f"Error updating treatment photos: {e}")
+
+    def display_treatment_photo(self, photo_path, label):
+        """Display treatment photo in label"""
+        try:
+            # Load and resize photo
+            image = Image.open(photo_path)
+            # Calculate size to fit in label (e.g., 200x200)
+            image.thumbnail((200, 200), Image.Resampling.LANCZOS)
+
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(image)
+
+            # Update label
+            label.config(image=photo)
+            label.image = photo  # Keep reference
+
+        except Exception as e:
+            logger.error(f"Error displaying treatment photo: {e}")
+            label.config(text="Error loading photo")
+
     def setup_settings_tab(self):
         """Setup settings and configuration tab"""
         # Create notebook for settings categories
