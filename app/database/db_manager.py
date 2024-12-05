@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from config import Config
-from .models import Patient, Service, Transaction, TransactionItem, Appointment, Staff
+from .model import Patient, Service, Transaction, TransactionItem, Appointment, Staff
 
 
 class DatabaseManager:
@@ -51,23 +51,23 @@ class DatabaseManager:
                 raise
 
     # Patient management methods
-    def add_patient(self, patient: Patient) -> str:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            patient_id = str(uuid.uuid4())
-            cursor.execute('''
-                INSERT INTO patients (
-                    id, name, phone, email, address, created_at,
-                    medical_history, notes, birth_date, gender,
-                    emergency_contact
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                patient_id, patient.name, patient.phone, patient.email,
-                patient.address, datetime.now(), patient.medical_history,
-                patient.notes, patient.birth_date, patient.gender,
-                patient.emergency_contact
-            ))
-            return patient_id
+    # def add_patient(self, patient: Patient) -> str:
+    #     with self.get_connection() as conn:
+    #         cursor = conn.cursor()
+    #         patient_id = str(uuid.uuid4())
+    #         cursor.execute('''
+    #             INSERT INTO patients (
+    #                 id, name, phone, email, address, created_at,
+    #                 medical_history, notes, birth_date, gender,
+    #                 emergency_contact
+    #             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    #         ''', (
+    #             patient_id, patient.name, patient.phone, patient.email,
+    #             patient.address, datetime.now(), patient.medical_history,
+    #             patient.notes, patient.birth_date, patient.gender,
+    #             patient.emergency_contact
+    #         ))
+    #         return patient_id
 
     def get_patient(self, patient_id: str) -> Optional[Patient]:
         with self.get_connection() as conn:
@@ -79,14 +79,14 @@ class DatabaseManager:
             row = result.fetchone()
             return Patient(**dict(row)) if row else None
 
-    def search_patients(self, query: str) -> List[Patient]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            result = cursor.execute('''
-                SELECT * FROM patients 
-                WHERE name LIKE ? OR phone LIKE ? OR email LIKE ?
-            ''', (f'%{query}%', f'%{query}%', f'%{query}%'))
-            return [Patient(**dict(row)) for row in result.fetchall()]
+    # def search_patients(self, query: str) -> List[Patient]:
+    #     with self.get_connection() as conn:
+    #         cursor = conn.cursor()
+    #         result = cursor.execute('''
+    #             SELECT * FROM patients
+    #             WHERE name LIKE ? OR phone LIKE ? OR email LIKE ?
+    #         ''', (f'%{query}%', f'%{query}%', f'%{query}%'))
+    #         return [Patient(**dict(row)) for row in result.fetchall()]
 
     # Service management methods
     def add_service(self, service: Service) -> str:
@@ -230,3 +230,137 @@ class DatabaseManager:
             cursor = conn.cursor()
             result = cursor.execute('SELECT * FROM staff WHERE active = 1')
             return [Staff(**dict(row)) for row in result.fetchall()]
+
+    def get_all_patients(self) -> List[Patient]:
+        """Retrieve all patients from the database"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                result = cursor.execute('''
+                    SELECT * FROM patients 
+                    ORDER BY name ASC
+                ''')
+                return [Patient(**dict(row)) for row in result.fetchall()]
+            except Exception as e:
+                logging.error(f"Error retrieving patients: {e}")
+                return []
+
+    def add_patient(self, patient: Patient) -> str:
+        """Add a new patient to the database"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                patient_id = str(uuid.uuid4())
+                cursor.execute('''
+                    INSERT INTO patients (
+                        id, name, phone, email, address, created_at,
+                        medical_history, notes, birth_date, gender,
+                        emergency_contact
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    patient_id,
+                    patient.name,
+                    patient.phone,
+                    patient.email,
+                    patient.address,
+                    patient.created_at,
+                    patient.medical_history,
+                    patient.notes,
+                    patient.birth_date,
+                    patient.gender,
+                    patient.emergency_contact
+                ))
+                logging.info(f"Added new patient with ID: {patient_id}")
+                return patient_id
+            except Exception as e:
+                logging.error(f"Error adding patient: {e}")
+                raise
+
+    def update_patient(self, patient: Patient) -> bool:
+        """Update an existing patient's information"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute('''
+                    UPDATE patients 
+                    SET name = ?, phone = ?, email = ?, address = ?,
+                        medical_history = ?, notes = ?, birth_date = ?,
+                        gender = ?, emergency_contact = ?
+                    WHERE id = ?
+                ''', (
+                    patient.name,
+                    patient.phone,
+                    patient.email,
+                    patient.address,
+                    patient.medical_history,
+                    patient.notes,
+                    patient.birth_date,
+                    patient.gender,
+                    patient.emergency_contact,
+                    patient.id
+                ))
+                logging.info(f"Updated patient with ID: {patient.id}")
+                return True
+            except Exception as e:
+                logging.error(f"Error updating patient: {e}")
+                return False
+
+    def delete_patient(self, patient_id: str) -> bool:
+        """Delete a patient from the database"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute('DELETE FROM patients WHERE id = ?', (patient_id,))
+                logging.info(f"Deleted patient with ID: {patient_id}")
+                return True
+            except Exception as e:
+                logging.error(f"Error deleting patient: {e}")
+                return False
+
+    def search_patients(self, query: str) -> List[Patient]:
+        """Search for patients based on name, phone, or email"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                result = cursor.execute('''
+                    SELECT * FROM patients 
+                    WHERE name LIKE ? OR phone LIKE ? OR email LIKE ?
+                    ORDER BY name ASC
+                ''', (f'%{query}%', f'%{query}%', f'%{query}%'))
+                return [Patient(**dict(row)) for row in result.fetchall()]
+            except Exception as e:
+                logging.error(f"Error searching patients: {e}")
+                return []
+
+    def get_patient_history(self, patient_id: str) -> dict:
+        """Get a patient's complete history including treatments and appointments"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                # Get patient details
+                patient = self.get_patient(patient_id)
+                if not patient:
+                    return None
+
+                # Get treatments/transactions
+                transactions = cursor.execute('''
+                    SELECT * FROM transactions 
+                    WHERE patient_id = ? 
+                    ORDER BY transaction_date DESC
+                ''', (patient_id,))
+
+                # Get appointments
+                appointments = cursor.execute('''
+                    SELECT * FROM appointments 
+                    WHERE patient_id = ? 
+                    ORDER BY start_time DESC
+                ''', (patient_id,))
+
+                return {
+                    'patient': patient,
+                    'transactions': [dict(row) for row in transactions],
+                    'appointments': [dict(row) for row in appointments]
+                }
+            except Exception as e:
+                logging.error(f"Error retrieving patient history: {e}")
+                return None

@@ -21,6 +21,23 @@ class Config:
     STATIC_ASSETS = STATIC_DIR / 'assets'
     TEMPLATES_DIR = STATIC_ASSETS / 'templates'
 
+    # Environment-based configuration
+    ENV = os.getenv('APP_ENV', 'development')
+
+    # Database configuration
+    DB_HOST = os.getenv('DB_HOST', 'localhost')
+    DB_PORT = os.getenv('DB_PORT', '5432')
+    DB_NAME = os.getenv('DB_NAME', 'beauty_clinic')
+    DB_USER = os.getenv('DB_USER', 'postgres')
+    DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+
+    # S3 configuration for file storage
+    S3_BUCKET = os.getenv('S3_BUCKET')
+    AWS_REGION = os.getenv('AWS_REGION', 'east-1')
+
+    # API configuration
+    API_BASE_URL = os.getenv('API_BASE_URL')
+
     # Company details from environment variables
     COMPANY_NAME = os.getenv('COMPANY_NAME', 'Your Beauty Clinic')
     COMPANY_ADDRESS = os.getenv('COMPANY_ADDRESS', 'Your Address')
@@ -41,3 +58,9 @@ class Config:
         ]
         for directory in dirs:
             directory.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def get_database_url():
+        if Config.ENV == 'development':
+            return f"sqlite:///{Config.DATABASE_PATH}"
+        return f"postgresql://{Config.DB_USER}:{Config.DB_PASSWORD}@{Config.DB_HOST}:{Config.DB_PORT}/{Config.DB_NAME}"
