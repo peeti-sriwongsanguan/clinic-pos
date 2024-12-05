@@ -282,25 +282,36 @@ class BeautyClinicPOS:
         label.pack(pady=10)
 
     def create_scrollable_frame(self, parent):
-        """Create a frame with scrollbar"""
-        # Create a canvas
-        canvas = tk.Canvas(parent)
-        # Create a scrollbar
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        # Create a frame inside the canvas
-        scrollable_frame = ttk.Frame(canvas)
+        """Create a frame with scrollbar - optimized version"""
+        # Use ttk Frame with canvas for better performance
+        container = ttk.Frame(parent)
+        container.pack(fill="both", expand=True)
 
-        # Configure the canvas
+        # Configure canvas with double buffering
+        canvas = tk.Canvas(container, bd=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+
+        scrollable_frame = ttk.Frame(canvas)
         scrollable_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
 
-        # Pack scrollbar and canvas
-        scrollbar.pack(side="right", fill="y")
+        # Use create_window instead of pack for better performance
+        canvas_frame = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+        # Bind to configure event to update the canvas window size
+        def configure_canvas(event):
+            canvas.itemconfig(canvas_frame, width=event.width)
+
+        canvas.bind('<Configure>', configure_canvas)
+
+        # Pack in correct order for better performance
         canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Configure scrolling
+        canvas.configure(yscrollcommand=scrollbar.set)
 
         return scrollable_frame
 
@@ -1479,6 +1490,55 @@ class BeautyClinicPOS:
             text_widget.pack(side="left", fill="x", expand=True)
 
             self.treatment_note_widgets[section] = text_widget
+            submit_frame = ttk.Frame(right_frame)
+            submit_frame.pack(fill='x', padx=5, pady=10)
+
+            ttk.Button(
+                submit_frame,
+                text=self.lang.get_text("submit_treatment"),
+                command=self.submit_treatment,
+                style="Accent.TButton"  # Use accent style for emphasis
+            ).pack(side='right', padx=5)
+
+    def submit_treatment(self):
+        """Handle treatment submission"""
+        if not hasattr(self, 'current_treatment'):
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_treatment_first")
+            )
+            return
+
+        try:
+            # Collect all notes
+            treatment_data = {
+                'treatment_id': self.current_treatment.id,
+                'notes': {
+                    section: widget.get('1.0', tk.END).strip()
+                    for section, widget in self.treatment_note_widgets.items()
+                },
+                'status': 'completed',
+                'completed_at': datetime.now()
+            }
+
+            # Save to database
+            self.db.update_treatment(treatment_data)
+
+            # Show success message
+            messagebox.showinfo(
+                "Success",
+                self.lang.get_text("treatment_submitted")
+            )
+
+            # Clear form
+            self.clear_treatment_form()
+
+        except Exception as e:
+            logger.error(f"Error submitting treatment: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_submitting_treatment")
+            )
 
     def search_treatment_patient(self, event=None):
         """Search patient for treatment history"""
@@ -1667,6 +1727,70 @@ class BeautyClinicPOS:
             text_widget.pack(side="left", fill="x", expand=True)
 
             setattr(self, attr_name, text_widget)
+        submit_frame = ttk.Frame(right_frame)
+        submit_frame.pack(fill='x', padx=5, pady=10)
+
+        ttk.Button(
+            submit_frame,
+            text=self.lang.get_text("submit_notes"),
+            command=self.submit_doctor_notes,
+            style="Accent.TButton"
+        ).pack(side='right', padx=5)
+
+    def submit_doctor_notes(self):
+        """Handle doctor notes submission"""
+        if not hasattr(self, 'current_patient'):
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_patient_first")
+            )
+            return
+
+        try:
+            # Collect notes data
+            notes_data = {
+                'patient_id': self.current_patient.id,
+                'medical_history': self.medical_history_text.get('1.0', tk.END).strip(),
+                'progress_notes': self.progress_text.get('1.0', tk.END).strip(),
+                'recommendations': self.recommendations_text.get('1.0', tk.END).strip(),
+                'next_steps': self.next_steps_text.get('1.0', tk.END).strip(),
+                'created_at': datetime.now()
+            }
+
+            # Save to database
+            self.db.save_doctor_notes(notes_data)
+
+            # Show success message
+            messagebox.showinfo(
+                "Success",
+                self.lang.get_text("notes_submitted")
+            )
+
+            # Clear form
+            self.clear_doctor_notes_form()
+
+        except Exception as e:
+            logger.error(f"Error submitting notes: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_submitting_notes")
+            )
+
+    def clear_treatment_form(self):
+        """Clear treatment form after submission"""
+        for widget in self.treatment_note_widgets.values():
+            widget.delete('1.0', tk.END)
+        self.current_treatment = None
+        # Clear any displayed photos
+        self.before_photo_label.config(image='', text="No photo")
+        self.after_photo_label.config(image='', text="No photo")
+
+    def clear_doctor_notes_form(self):
+        """Clear doctor notes form after submission"""
+        self.medical_history_text.delete('1.0', tk.END)
+        self.progress_text.delete('1.0', tk.END)
+        self.recommendations_text.delete('1.0', tk.END)
+        self.next_steps_text.delete('1.0', tk.END)
 
     def print_treatment_record(self):
         """Print treatment record as PDF"""
