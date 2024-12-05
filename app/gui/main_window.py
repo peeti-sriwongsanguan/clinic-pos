@@ -1404,18 +1404,462 @@ class BeautyClinicPOS:
 
     def setup_treatments_tab(self):
         """Setup treatments tracking tab"""
-        # Will implement later
-        pass
+        # Create main containers
+        left_frame = ttk.Frame(self.treatments_tab)
+        left_frame.pack(side='left', fill='both', expand=True, padx=5, pady=5)
+
+        right_frame = ttk.Frame(self.treatments_tab)
+        right_frame.pack(side='right', fill='both', expand=True, padx=5, pady=5)
+
+        # Left side - Patient Selection and History
+        # Patient Search
+        search_frame = ttk.LabelFrame(left_frame, text=self.lang.get_text("search_patient"))
+        search_frame.pack(fill='x', padx=5, pady=5)
+
+        self.treatment_patient_search = ttk.Entry(search_frame)
+        self.treatment_patient_search.pack(fill='x', padx=5, pady=5)
+        self.treatment_patient_search.bind('<KeyRelease>', self.search_treatment_patient)
+
+        # Treatment History
+        history_frame = ttk.LabelFrame(left_frame, text=self.lang.get_text("treatment_history"))
+        history_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Treatment history tree
+        columns = ('date', 'service', 'doctor', 'status')
+        self.treatment_history_tree = ttk.Treeview(
+            history_frame,
+            columns=columns,
+            show='headings'
+        )
+
+        # Configure columns
+        self.treatment_history_tree.heading('date', text=self.lang.get_text("date"))
+        self.treatment_history_tree.heading('service', text=self.lang.get_text("service"))
+        self.treatment_history_tree.heading('doctor', text=self.lang.get_text("doctor"))
+        self.treatment_history_tree.heading('status', text=self.lang.get_text("status"))
+
+        self.treatment_history_tree.pack(fill='both', expand=True, padx=5, pady=5)
+        self.treatment_history_tree.bind('<<TreeviewSelect>>', self.load_treatment_details)
+
+        # Right side - Treatment Details
+        details_frame = ttk.LabelFrame(right_frame, text=self.lang.get_text("treatment_details"))
+        details_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Before/After Photos
+        photos_frame = ttk.Frame(details_frame)
+        photos_frame.pack(fill='x', padx=5, pady=5)
+
+        # Before photo
+        before_frame = ttk.LabelFrame(photos_frame, text=self.lang.get_text("before"))
+        before_frame.pack(side='left', fill='both', expand=True, padx=5)
+
+        self.before_photo_label = ttk.Label(before_frame, text="No photo")
+        self.before_photo_label.pack(padx=5, pady=5)
+
+        ttk.Button(
+            before_frame,
+            text=self.lang.get_text("add_photo"),
+            command=lambda: self.add_treatment_photo("before")
+        ).pack(padx=5, pady=5)
+
+        # After photo
+        after_frame = ttk.LabelFrame(photos_frame, text=self.lang.get_text("after"))
+        after_frame.pack(side='right', fill='both', expand=True, padx=5)
+
+        self.after_photo_label = ttk.Label(after_frame, text="No photo")
+        self.after_photo_label.pack(padx=5, pady=5)
+
+        ttk.Button(
+            after_frame,
+            text=self.lang.get_text("add_photo"),
+            command=lambda: self.add_treatment_photo("after")
+        ).pack(padx=5, pady=5)
+
+        # Treatment Notes
+        notes_frame = ttk.LabelFrame(details_frame, text=self.lang.get_text("treatment_notes"))
+        notes_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Notes sections
+        sections = [
+            ('chief_complaint', 3),
+            ('diagnosis', 3),
+            ('treatment_plan', 4),
+            ('notes', 4),
+            ('follow_up', 2)
+        ]
+
+        self.treatment_note_widgets = {}
+
+        for section, height in sections:
+            section_frame = ttk.Frame(notes_frame)
+            section_frame.pack(fill='x', pady=2)
+
+            ttk.Label(
+                section_frame,
+                text=self.lang.get_text(f"treatment_{section}")
+            ).pack(anchor='w')
+
+            text_widget = tk.Text(section_frame, height=height)
+            text_widget.pack(fill='x', pady=2)
+            self.treatment_note_widgets[section] = text_widget
+
+        # Buttons
+        button_frame = ttk.Frame(details_frame)
+        button_frame.pack(fill='x', padx=5, pady=5)
+
+        ttk.Button(
+            button_frame,
+            text=self.lang.get_text("save_treatment"),
+            command=self.save_treatment_notes
+        ).pack(side='right', padx=5)
+
+        ttk.Button(
+            button_frame,
+            text=self.lang.get_text("print_treatment"),
+            command=self.print_treatment_record
+        ).pack(side='right', padx=5)
+
+    def search_treatment_patient(self, event=None):
+        """Search patient for treatment history"""
+        search_term = self.treatment_patient_search.get()
+        if len(search_term) < 2:
+            return
+
+        try:
+            patients = self.db.search_patients(search_term)
+            if patients:
+                self.show_treatment_patient_selection(patients)
+        except Exception as e:
+            logger.error(f"Error searching patients: {e}")
+
+    def show_treatment_patient_selection(self, patients):
+        """Show dialog to select patient for treatment history"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(self.lang.get_text("select_patient"))
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Create listbox with patients
+        listbox = tk.Listbox(dialog, height=10)
+        listbox.pack(fill='both', expand=True, padx=5, pady=5)
+
+        for patient in patients:
+            listbox.insert(tk.END, f"{patient.name} - {patient.phone}")
+
+        def on_select():
+            selection = listbox.curselection()
+            if selection:
+                patient = patients[selection[0]]
+                self.load_patient_treatments(patient)
+                dialog.destroy()
+
+        # Buttons
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(fill='x', padx=5, pady=5)
+
+        ttk.Button(
+            button_frame,
+            text=self.lang.get_text("select"),
+            command=on_select
+        ).pack(side='right', padx=5)
+
+        ttk.Button(
+            button_frame,
+            text=self.lang.get_text("cancel"),
+            command=dialog.destroy
+        ).pack(side='right', padx=5)
+
+    def load_patient_treatments(self, patient):
+        """Load treatment history for selected patient"""
+        try:
+            treatments = self.db.get_patient_treatment_history(patient.id)
+            self.treatment_history_tree.delete(*self.treatment_history_tree.get_children())
+
+            for treatment in treatments:
+                self.treatment_history_tree.insert('', 'end', values=(
+                    treatment.treatment_date.strftime("%Y-%m-%d"),
+                    treatment.service_name,
+                    treatment.doctor_name,
+                    treatment.status
+                ))
+
+        except Exception as e:
+            logger.error(f"Error loading treatments: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_loading_treatments")
+            )
+
+    def load_treatment_details(self, event=None):
+        """Load details for selected treatment"""
+        selection = self.treatment_history_tree.selection()
+        if not selection:
+            return
+
+        try:
+            item = self.treatment_history_tree.item(selection[0])
+            treatment_date = item['values'][0]
+            # Load treatment details from database
+            treatment = self.db.get_treatment_details(treatment_date)
+
+            # Update notes sections
+            for section, widget in self.treatment_note_widgets.items():
+                widget.delete('1.0', tk.END)
+                widget.insert('1.0', getattr(treatment, section, ''))
+
+            # Update photos
+            self.update_treatment_photos(treatment)
+
+        except Exception as e:
+            logger.error(f"Error loading treatment details: {e}")
+
+    def save_treatment_notes(self):
+        """Save treatment notes to database"""
+        selection = self.treatment_history_tree.selection()
+        if not selection:
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_treatment_first")
+            )
+            return
+
+        try:
+            # Get notes from all sections
+            notes = {
+                section: widget.get('1.0', tk.END).strip()
+                for section, widget in self.treatment_note_widgets.items()
+            }
+
+            # Save to database
+            self.db.update_treatment_notes(
+                treatment_id=self.treatment_history_tree.item(selection[0])['values'][0],
+                notes=notes
+            )
+
+            messagebox.showinfo(
+                "Success",
+                self.lang.get_text("treatment_saved")
+            )
+
+        except Exception as e:
+            logger.error(f"Error saving treatment notes: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_saving_treatment")
+            )
 
     def setup_doctor_notes_tab(self):
         """Setup doctor's notes interface"""
-        # Will implement later
-        pass
+        # Create main containers
+        left_frame = ttk.Frame(self.doctor_notes_tab)
+        left_frame.pack(side='left', fill='both', expand=True, padx=5, pady=5)
+
+        right_frame = ttk.Frame(self.doctor_notes_tab)
+        right_frame.pack(side='right', fill='both', expand=True, padx=5, pady=5)
+
+        # Patient Selection (Left Side)
+        patient_frame = ttk.LabelFrame(left_frame, text=self.lang.get_text("patient_selection"))
+        patient_frame.pack(fill='x', padx=5, pady=5)
+
+        # Search
+        search_var = tk.StringVar()
+        search_var.trace('w', lambda *args: self.search_patients_for_notes(search_var.get()))
+        ttk.Entry(patient_frame, textvariable=search_var).pack(fill='x', padx=5, pady=5)
+
+        # Patient list
+        self.doctor_notes_patient_list = ttk.Treeview(
+            left_frame,
+            columns=('name', 'last_visit'),
+            show='headings'
+        )
+        self.doctor_notes_patient_list.heading('name', text=self.lang.get_text("patient_name"))
+        self.doctor_notes_patient_list.heading('last_visit', text=self.lang.get_text("last_visit"))
+        self.doctor_notes_patient_list.pack(fill='both', expand=True, padx=5, pady=5)
+        self.doctor_notes_patient_list.bind('<<TreeviewSelect>>', self.load_patient_notes)
+
+        # Notes Section (Right Side)
+        notes_frame = ttk.LabelFrame(right_frame, text=self.lang.get_text("medical_notes"))
+        notes_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Medical History
+        ttk.Label(notes_frame, text=self.lang.get_text("medical_history")).pack(anchor='w', padx=5, pady=2)
+        self.medical_history_text = tk.Text(notes_frame, height=4)
+        self.medical_history_text.pack(fill='x', padx=5, pady=2)
+
+        # Treatment Progress
+        ttk.Label(notes_frame, text=self.lang.get_text("treatment_progress")).pack(anchor='w', padx=5, pady=2)
+        self.progress_text = tk.Text(notes_frame, height=4)
+        self.progress_text.pack(fill='x', padx=5, pady=2)
+
+        # Recommendations
+        ttk.Label(notes_frame, text=self.lang.get_text("recommendations")).pack(anchor='w', padx=5, pady=2)
+        self.recommendations_text = tk.Text(notes_frame, height=4)
+        self.recommendations_text.pack(fill='x', padx=5, pady=2)
+
+        # Next Steps
+        ttk.Label(notes_frame, text=self.lang.get_text("next_steps")).pack(anchor='w', padx=5, pady=2)
+        self.next_steps_text = tk.Text(notes_frame, height=4)
+        self.next_steps_text.pack(fill='x', padx=5, pady=2)
+
+        # Photos Section
+        photos_frame = ttk.LabelFrame(right_frame, text=self.lang.get_text("progress_photos"))
+        photos_frame.pack(fill='x', padx=5, pady=5)
+
+        ttk.Button(
+            photos_frame,
+            text=self.lang.get_text("add_photos"),
+            command=self.add_progress_photos
+        ).pack(padx=5, pady=5)
+
+        # Action Buttons
+        button_frame = ttk.Frame(right_frame)
+        button_frame.pack(fill='x', padx=5, pady=5)
+
+        ttk.Button(
+            button_frame,
+            text=self.lang.get_text("save_notes"),
+            command=self.save_doctor_notes
+        ).pack(side='right', padx=5)
+
+        ttk.Button(
+            button_frame,
+            text=self.lang.get_text("print_notes"),
+            command=self.print_doctor_notes
+        ).pack(side='right', padx=5)
 
     def setup_settings_tab(self):
         """Setup settings and configuration tab"""
-        # Will implement later
-        pass
+        # Create notebook for settings categories
+        settings_notebook = ttk.Notebook(self.settings_tab)
+        settings_notebook.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # General Settings
+        general_frame = ttk.Frame(settings_notebook)
+        settings_notebook.add(general_frame, text=self.lang.get_text("general_settings"))
+
+        # Company Information
+        company_frame = ttk.LabelFrame(general_frame, text=self.lang.get_text("company_info"))
+        company_frame.pack(fill='x', padx=5, pady=5)
+
+        company_fields = [
+            ("company_name", "Clinic Name"),
+            ("company_address", "Address"),
+            ("company_phone", "Phone"),
+            ("company_email", "Email"),
+            ("company_tax_id", "Tax ID")
+        ]
+
+        self.company_vars = {}
+        for field_id, label in company_fields:
+            frame = ttk.Frame(company_frame)
+            frame.pack(fill='x', padx=5, pady=2)
+            ttk.Label(frame, text=self.lang.get_text(label)).pack(side='left', width=100)
+            var = tk.StringVar()
+            ttk.Entry(frame, textvariable=var).pack(side='left', fill='x', expand=True)
+            self.company_vars[field_id] = var
+
+        # User Management
+        users_frame = ttk.Frame(settings_notebook)
+        settings_notebook.add(users_frame, text=self.lang.get_text("user_management"))
+
+        # User list
+        self.users_tree = ttk.Treeview(
+            users_frame,
+            columns=('username', 'role', 'status'),
+            show='headings'
+        )
+        self.users_tree.heading('username', text=self.lang.get_text("username"))
+        self.users_tree.heading('role', text=self.lang.get_text("role"))
+        self.users_tree.heading('status', text=self.lang.get_text("status"))
+        self.users_tree.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # User management buttons
+        user_buttons = ttk.Frame(users_frame)
+        user_buttons.pack(fill='x', padx=5, pady=5)
+        ttk.Button(
+            user_buttons,
+            text=self.lang.get_text("add_user"),
+            command=self.show_add_user_dialog
+        ).pack(side='left', padx=5)
+
+        # Services Management
+        services_frame = ttk.Frame(settings_notebook)
+        settings_notebook.add(services_frame, text=self.lang.get_text("services_management"))
+
+        # Categories frame
+        categories_frame = ttk.LabelFrame(services_frame, text=self.lang.get_text("categories"))
+        categories_frame.pack(fill='x', padx=5, pady=5)
+
+        ttk.Button(
+            categories_frame,
+            text=self.lang.get_text("manage_categories"),
+            command=self.show_categories_dialog
+        ).pack(padx=5, pady=5)
+
+        # Commission Settings
+        commission_frame = ttk.Frame(settings_notebook)
+        settings_notebook.add(commission_frame, text=self.lang.get_text("commission_settings"))
+
+        # Commission rates tree
+        self.commission_tree = ttk.Treeview(
+            commission_frame,
+            columns=('service', 'staff', 'rate'),
+            show='headings'
+        )
+        self.commission_tree.heading('service', text=self.lang.get_text("service"))
+        self.commission_tree.heading('staff', text=self.lang.get_text("staff"))
+        self.commission_tree.heading('rate', text=self.lang.get_text("rate"))
+        self.commission_tree.pack(fill='both', expand=True, padx=5, pady=5)
+
+        commission_buttons = ttk.Frame(commission_frame)
+        commission_buttons.pack(fill='x', padx=5, pady=5)
+        ttk.Button(
+            commission_buttons,
+            text=self.lang.get_text("set_commission"),
+            command=self.show_commission_dialog
+        ).pack(side='left', padx=5)
+
+        # Backup Settings
+        backup_frame = ttk.Frame(settings_notebook)
+        settings_notebook.add(backup_frame, text=self.lang.get_text("backup_settings"))
+
+        # Backup location
+        backup_path_frame = ttk.LabelFrame(backup_frame, text=self.lang.get_text("backup_location"))
+        backup_path_frame.pack(fill='x', padx=5, pady=5)
+
+        self.backup_path_var = tk.StringVar()
+        ttk.Entry(backup_path_frame, textvariable=self.backup_path_var).pack(side='left', fill='x', expand=True, padx=5,
+                                                                             pady=5)
+        ttk.Button(
+            backup_path_frame,
+            text=self.lang.get_text("browse"),
+            command=self.select_backup_location
+        ).pack(side='right', padx=5)
+
+        # Backup schedule
+        schedule_frame = ttk.LabelFrame(backup_frame, text=self.lang.get_text("backup_schedule"))
+        schedule_frame.pack(fill='x', padx=5, pady=5)
+
+        self.backup_schedule_var = tk.StringVar(value="daily")
+        ttk.Radiobutton(
+            schedule_frame,
+            text=self.lang.get_text("daily"),
+            value="daily",
+            variable=self.backup_schedule_var
+        ).pack(padx=5, pady=2)
+        ttk.Radiobutton(
+            schedule_frame,
+            text=self.lang.get_text("weekly"),
+            value="weekly",
+            variable=self.backup_schedule_var
+        ).pack(padx=5, pady=2)
+
+        # Save settings button
+        ttk.Button(
+            self.settings_tab,
+            text=self.lang.get_text("save_settings"),
+            command=self.save_settings
+        ).pack(side='bottom', padx=5, pady=10)
 
     def run(self):
         self.root.mainloop()
