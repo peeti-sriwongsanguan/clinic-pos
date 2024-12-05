@@ -391,8 +391,8 @@ class BeautyClinicPOS:
         self.root.grid_rowconfigure(0, weight=1)
 
         # Add a test label to see if window appears
-        test_label = tk.Label(self.root, text="Beauty Clinic POS is starting...", font=('Helvetica', 16))
-        test_label.pack(pady=20)
+        # test_label = tk.Label(self.root, text="Beauty Clinic POS is starting...", font=('Helvetica', 16))
+        # test_label.pack(pady=20)
 
 
     def setup_branding(self):
@@ -498,7 +498,7 @@ class BeautyClinicPOS:
         header_frame = ttk.Frame(self.root, style='Header.TFrame')
         header_frame.pack(fill='x', padx=10, pady=5)
 
-        # Left side - Logo and clinic name
+        # Left side - Logo
         left_frame = ttk.Frame(header_frame)
         left_frame.pack(side='left', fill='y')
 
@@ -515,14 +515,6 @@ class BeautyClinicPOS:
             logo_label.pack(side='left', padx=5)
         except Exception as e:
             logger.error(f"Error loading logo: {e}")
-
-        # Clinic name
-        clinic_label = ttk.Label(
-            left_frame,
-            text="Wellness by BFF",
-            style='ClinicName.TLabel'
-        )
-        clinic_label.pack(side='left', padx=10)
 
         # Right side - Controls
         right_frame = ttk.Frame(header_frame)
