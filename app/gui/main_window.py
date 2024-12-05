@@ -1722,63 +1722,142 @@ class BeautyClinicPOS:
             )
 
     def setup_doctor_notes_tab(self):
-        """Setup doctor's notes interface with scrollable notes"""
-        # Main containers remain the same
+        """Setup doctor's notes interface"""
+        # Create main containers
         left_frame = ttk.Frame(self.doctor_notes_tab)
         left_frame.pack(side='left', fill='both', expand=True, padx=5, pady=5)
 
         right_frame = ttk.Frame(self.doctor_notes_tab)
         right_frame.pack(side='right', fill='both', expand=True, padx=5, pady=5)
 
-        # [Previous left side code remains the same]
+        # Patient Selection (Left Side)
+        patient_frame = ttk.LabelFrame(left_frame, text=self.lang.get_text("patient_selection"))
+        patient_frame.pack(fill='x', padx=5, pady=5)
 
-        # Notes Section with scrollbar
-        notes_frame = ttk.LabelFrame(right_frame, text=self.lang.get_text("medical_notes"))
-        notes_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        # Search
+        search_var = tk.StringVar()
+        search_var.trace('w', lambda *args: self.search_patients_for_notes(search_var.get()))
+        search_entry = ttk.Entry(patient_frame, textvariable=search_var)
+        search_entry.pack(fill='x', padx=5, pady=5)
 
-        # Create scrollable frame for notes
-        scrollable_notes = self.create_scrollable_frame(notes_frame)
+        # Patient list frame
+        list_frame = ttk.Frame(left_frame)
+        list_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
-        # Medical History with scrollbar
-        history_frame = ttk.Frame(scrollable_notes)
-        history_frame.pack(fill='x', pady=5)
+        # Patient list with scrollbar
+        patient_list_scrollbar = ttk.Scrollbar(list_frame)
+        patient_list_scrollbar.pack(side='right', fill='y')
 
-        ttk.Label(history_frame, text=self.lang.get_text("medical_history")).pack(anchor='w', padx=5, pady=2)
+        self.doctor_notes_patient_list = ttk.Treeview(
+            list_frame,
+            columns=('name', 'last_visit'),
+            show='headings',
+            yscrollcommand=patient_list_scrollbar.set
+        )
+        self.doctor_notes_patient_list.pack(fill='both', expand=True)
+        patient_list_scrollbar.config(command=self.doctor_notes_patient_list.yview)
+
+        # Configure patient list columns
+        self.doctor_notes_patient_list.heading('name', text=self.lang.get_text("patient_name"))
+        self.doctor_notes_patient_list.heading('last_visit', text=self.lang.get_text("last_visit"))
+        self.doctor_notes_patient_list.column('name', width=150)
+        self.doctor_notes_patient_list.column('last_visit', width=100)
+
+        self.doctor_notes_patient_list.bind('<<TreeviewSelect>>', self.load_patient_notes)
+
+        # Notes Section (Right Side)
+        # Create main scrollable frame for right side
+        notes_container = ttk.Frame(right_frame)
+        notes_container.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Create canvas for scrolling
+        canvas = tk.Canvas(notes_container)
+        scrollbar = ttk.Scrollbar(notes_container, orient="vertical", command=canvas.yview)
+        notes_scrollable_frame = ttk.Frame(canvas)
+
+        # Configure scrolling
+        notes_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=notes_scrollable_frame, anchor="nw", width=canvas.winfo_width())
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Patient Info Section
+        info_frame = ttk.LabelFrame(notes_scrollable_frame, text=self.lang.get_text("patient_info"))
+        info_frame.pack(fill='x', padx=5, pady=5)
+
+        self.patient_info_display = ttk.Label(info_frame, text="")
+        self.patient_info_display.pack(fill='x', padx=5, pady=5)
+
+        # Medical History Section
+        history_frame = ttk.LabelFrame(notes_scrollable_frame, text=self.lang.get_text("medical_history"))
+        history_frame.pack(fill='x', padx=5, pady=5)
 
         history_container = ttk.Frame(history_frame)
-        history_container.pack(fill='x', padx=5, pady=2)
+        history_container.pack(fill='x', padx=5, pady=5)
 
-        self.medical_history_text = tk.Text(history_container, height=4)
-        history_scrollbar = ttk.Scrollbar(history_container, orient="vertical", command=self.medical_history_text.yview)
+        self.medical_history_text = tk.Text(history_container, height=4, wrap=tk.WORD)
+        history_scrollbar = ttk.Scrollbar(history_container, command=self.medical_history_text.yview)
         self.medical_history_text.configure(yscrollcommand=history_scrollbar.set)
 
-        history_scrollbar.pack(side="right", fill="y")
-        self.medical_history_text.pack(side="left", fill="x", expand=True)
+        self.medical_history_text.pack(side='left', fill='x', expand=True)
+        history_scrollbar.pack(side='right', fill='y')
 
-        # Similar setup for other text areas
-        note_sections = [
-            ("progress_text", "treatment_progress", 4),
-            ("recommendations_text", "recommendations", 4),
-            ("next_steps_text", "next_steps", 4)
-        ]
+        # Treatment Progress Section
+        progress_frame = ttk.LabelFrame(notes_scrollable_frame, text=self.lang.get_text("treatment_progress"))
+        progress_frame.pack(fill='x', padx=5, pady=5)
 
-        for attr_name, label_text, height in note_sections:
-            frame = ttk.Frame(scrollable_notes)
-            frame.pack(fill='x', pady=5)
+        progress_container = ttk.Frame(progress_frame)
+        progress_container.pack(fill='x', padx=5, pady=5)
 
-            ttk.Label(frame, text=self.lang.get_text(label_text)).pack(anchor='w', padx=5, pady=2)
+        self.progress_text = tk.Text(progress_container, height=4, wrap=tk.WORD)
+        progress_scrollbar = ttk.Scrollbar(progress_container, command=self.progress_text.yview)
+        self.progress_text.configure(yscrollcommand=progress_scrollbar.set)
 
-            container = ttk.Frame(frame)
-            container.pack(fill='x', padx=5, pady=2)
+        self.progress_text.pack(side='left', fill='x', expand=True)
+        progress_scrollbar.pack(side='right', fill='y')
 
-            text_widget = tk.Text(container, height=height)
-            scrollbar = ttk.Scrollbar(container, orient="vertical", command=text_widget.yview)
-            text_widget.configure(yscrollcommand=scrollbar.set)
+        # Recommendations Section
+        recommendations_frame = ttk.LabelFrame(notes_scrollable_frame, text=self.lang.get_text("recommendations"))
+        recommendations_frame.pack(fill='x', padx=5, pady=5)
 
-            scrollbar.pack(side="right", fill="y")
-            text_widget.pack(side="left", fill="x", expand=True)
+        recommendations_container = ttk.Frame(recommendations_frame)
+        recommendations_container.pack(fill='x', padx=5, pady=5)
 
-            setattr(self, attr_name, text_widget)
+        self.recommendations_text = tk.Text(recommendations_container, height=4, wrap=tk.WORD)
+        recommendations_scrollbar = ttk.Scrollbar(recommendations_container, command=self.recommendations_text.yview)
+        self.recommendations_text.configure(yscrollcommand=recommendations_scrollbar.set)
+
+        self.recommendations_text.pack(side='left', fill='x', expand=True)
+        recommendations_scrollbar.pack(side='right', fill='y')
+
+        # Next Steps Section
+        next_steps_frame = ttk.LabelFrame(notes_scrollable_frame, text=self.lang.get_text("next_steps"))
+        next_steps_frame.pack(fill='x', padx=5, pady=5)
+
+        next_steps_container = ttk.Frame(next_steps_frame)
+        next_steps_container.pack(fill='x', padx=5, pady=5)
+
+        self.next_steps_text = tk.Text(next_steps_container, height=4, wrap=tk.WORD)
+        next_steps_scrollbar = ttk.Scrollbar(next_steps_container, command=self.next_steps_text.yview)
+        self.next_steps_text.configure(yscrollcommand=next_steps_scrollbar.set)
+
+        self.next_steps_text.pack(side='left', fill='x', expand=True)
+        next_steps_scrollbar.pack(side='right', fill='y')
+
+        # Configure canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Handle canvas resize
+        def configure_canvas(event):
+            canvas.itemconfig(canvas.find_withtag("all")[0], width=event.width)
+
+        canvas.bind('<Configure>', configure_canvas)
+
+        # Submit Button Frame (Outside scrollable area)
         submit_frame = ttk.Frame(right_frame)
         submit_frame.pack(fill='x', padx=5, pady=10)
 
