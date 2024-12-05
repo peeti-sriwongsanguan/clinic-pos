@@ -1926,6 +1926,256 @@ class BeautyClinicPOS:
             logger.error(f"Error displaying treatment photo: {e}")
             label.config(text="Error loading photo")
 
+    def search_patients_for_notes(self, search_term: str):
+        """Search patients for doctor notes"""
+        if len(search_term) < 2:
+            return
+
+        try:
+            patients = self.db.search_patients(search_term)
+            self.doctor_notes_patient_list.delete(*self.doctor_notes_patient_list.get_children())
+
+            for patient in patients:
+                last_visit = self.db.get_patient_last_visit(patient.id)
+                self.doctor_notes_patient_list.insert('', 'end', values=(
+                    patient.name,
+                    last_visit.strftime("%Y-%m-%d") if last_visit else "No visits"
+                ))
+        except Exception as e:
+            logger.error(f"Error searching patients for notes: {e}")
+
+    def load_patient_notes(self, event=None):
+        """Load notes for selected patient"""
+        selection = self.doctor_notes_patient_list.selection()
+        if not selection:
+            return
+
+        try:
+            patient_name = self.doctor_notes_patient_list.item(selection[0])['values'][0]
+            patient = self.db.get_patient_by_name(patient_name)
+
+            if patient:
+                # Clear existing notes
+                self.medical_history_text.delete('1.0', tk.END)
+                self.progress_text.delete('1.0', tk.END)
+                self.recommendations_text.delete('1.0', tk.END)
+                self.next_steps_text.delete('1.0', tk.END)
+
+                # Load patient's medical history
+                self.medical_history_text.insert('1.0', patient.medical_history or '')
+
+                # Load latest treatment notes
+                latest_treatment = self.db.get_latest_treatment(patient.id)
+                if latest_treatment:
+                    self.progress_text.insert('1.0', latest_treatment.progress_notes or '')
+                    self.recommendations_text.insert('1.0', latest_treatment.recommendations or '')
+                    self.next_steps_text.insert('1.0', latest_treatment.next_steps or '')
+
+        except Exception as e:
+            logger.error(f"Error loading patient notes: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_loading_notes")
+            )
+
+    def save_doctor_notes(self):
+        """Save doctor's notes to database"""
+        selection = self.doctor_notes_patient_list.selection()
+        if not selection:
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_patient_first")
+            )
+            return
+
+        try:
+            patient_name = self.doctor_notes_patient_list.item(selection[0])['values'][0]
+            patient = self.db.get_patient_by_name(patient_name)
+
+            if patient:
+                # Update medical history
+                self.db.update_patient_medical_history(
+                    patient.id,
+                    self.medical_history_text.get('1.0', tk.END).strip()
+                )
+
+                # Create new treatment notes
+                notes_data = {
+                    'patient_id': patient.id,
+                    'progress_notes': self.progress_text.get('1.0', tk.END).strip(),
+                    'recommendations': self.recommendations_text.get('1.0', tk.END).strip(),
+                    'next_steps': self.next_steps_text.get('1.0', tk.END).strip(),
+                    'created_at': datetime.now()
+                }
+
+                self.db.add_treatment_notes(notes_data)
+
+                messagebox.showinfo(
+                    "Success",
+                    self.lang.get_text("notes_saved")
+                )
+
+        except Exception as e:
+            logger.error(f"Error saving doctor notes: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_saving_notes")
+            )
+
+    def print_doctor_notes(self):
+        """Print doctor's notes as PDF"""
+        selection = self.doctor_notes_patient_list.selection()
+        if not selection:
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_patient_first")
+            )
+            return
+
+        try:
+            patient_name = self.doctor_notes_patient_list.item(selection[0])['values'][0]
+            patient = self.db.get_patient_by_name(patient_name)
+
+            if patient:
+                # Prepare notes data
+                notes_data = {
+                    'patient_name': patient.name,
+                    'date': datetime.now().strftime("%Y-%m-%d"),
+                    'medical_history': self.medical_history_text.get('1.0', tk.END).strip(),
+                    'progress_notes': self.progress_text.get('1.0', tk.END).strip(),
+                    'recommendations': self.recommendations_text.get('1.0', tk.END).strip(),
+                    'next_steps': self.next_steps_text.get('1.0', tk.END).strip()
+                }
+
+                # Generate PDF
+                filename = f"doctor_notes_{patient.name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                self.generate_doctor_notes_pdf(notes_data, filename)
+
+                messagebox.showinfo(
+                    "Success",
+                    self.lang.get_text("notes_printed")
+                )
+
+        except Exception as e:
+            logger.error(f"Error printing doctor notes: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_printing_notes")
+            )
+
+    def generate_doctor_notes_pdf(self, notes_data: dict, filename: str):
+        """Generate PDF for doctor's notes"""
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+        doc = SimpleDocTemplate(filename, pagesize=letter)
+        story = []
+        styles = getSampleStyleSheet()
+
+        # Add clinic info
+        story.append(Paragraph(self.lang.get_text("clinic_name"), styles['Title']))
+        story.append(Spacer(1, 12))
+
+        # Add patient info and date
+        story.append(Paragraph(f"Patient: {notes_data['patient_name']}", styles['Normal']))
+        story.append(Paragraph(f"Date: {notes_data['date']}", styles['Normal']))
+        story.append(Spacer(1, 12))
+
+        # Add notes sections
+        sections = [
+            ("Medical History", notes_data['medical_history']),
+            ("Progress Notes", notes_data['progress_notes']),
+            ("Recommendations", notes_data['recommendations']),
+            ("Next Steps", notes_data['next_steps'])
+        ]
+
+        for title, content in sections:
+            story.append(Paragraph(title, styles['Heading2']))
+            story.append(Paragraph(content or "N/A", styles['Normal']))
+            story.append(Spacer(1, 12))
+
+        doc.build(story)
+
+    def add_progress_photos(self):
+        """Add progress photos to patient record"""
+        selection = self.doctor_notes_patient_list.selection()
+        if not selection:
+            messagebox.showwarning(
+                "Warning",
+                self.lang.get_text("select_patient_first")
+            )
+            return
+
+        try:
+            from tkinter import filedialog
+
+            filetypes = [
+                ('Image files', '*.jpg *.jpeg *.png'),
+                ('All files', '*.*')
+            ]
+
+            filenames = filedialog.askopenfilenames(
+                title=self.lang.get_text("select_photos"),
+                filetypes=filetypes
+            )
+
+            if filenames:
+                patient_name = self.doctor_notes_patient_list.item(selection[0])['values'][0]
+                patient = self.db.get_patient_by_name(patient_name)
+
+                if patient:
+                    # Save each photo
+                    photo_paths = []
+                    for filename in filenames:
+                        photo_path = self.save_progress_photo(filename, patient.id)
+                        photo_paths.append(photo_path)
+
+                    # Update database
+                    self.db.add_progress_photos(patient.id, photo_paths)
+
+                    messagebox.showinfo(
+                        "Success",
+                        self.lang.get_text("photos_added")
+                    )
+
+        except Exception as e:
+            logger.error(f"Error adding progress photos: {e}")
+            messagebox.showerror(
+                "Error",
+                self.lang.get_text("error_adding_photos")
+            )
+
+    def save_progress_photo(self, source_path: str, patient_id: str) -> str:
+        """Save progress photo to storage"""
+        from PIL import Image
+        import shutil
+
+        try:
+            # Create photos directory if it doesn't exist
+            photos_dir = os.path.join('static', 'photos', 'progress', patient_id)
+            os.makedirs(photos_dir, exist_ok=True)
+
+            # Generate destination path
+            file_ext = os.path.splitext(source_path)[1]
+            dest_filename = f"progress_{datetime.now().strftime('%Y%m%d_%H%M%S')}{file_ext}"
+            dest_path = os.path.join(photos_dir, dest_filename)
+
+            # Copy and optimize photo
+            with Image.open(source_path) as img:
+                # Resize if too large
+                max_size = (1200, 1200)
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                # Save optimized version
+                img.save(dest_path, quality=85, optimize=True)
+
+            return dest_path
+
+        except Exception as e:
+            logger.error(f"Error saving progress photo: {e}")
+            raise
+
     def setup_settings_tab(self):
         """Setup settings and configuration tab"""
         # Create notebook for settings categories
