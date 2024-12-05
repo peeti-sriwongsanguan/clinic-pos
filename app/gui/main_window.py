@@ -2176,6 +2176,301 @@ class BeautyClinicPOS:
             logger.error(f"Error saving progress photo: {e}")
             raise
 
+    def show_add_user_dialog(self):
+        """Show dialog to add new user"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(self.lang.get_text("add_user"))
+        dialog.geometry("400x500")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Create form frame
+        form_frame = ttk.Frame(dialog)
+        form_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # Username
+        ttk.Label(form_frame, text=self.lang.get_text("username"), width=20).pack(anchor='w', pady=2)
+        username_var = tk.StringVar()
+        ttk.Entry(form_frame, textvariable=username_var).pack(fill='x', pady=2)
+
+        # Full Name
+        ttk.Label(form_frame, text=self.lang.get_text("full_name"), width=20).pack(anchor='w', pady=2)
+        name_var = tk.StringVar()
+        ttk.Entry(form_frame, textvariable=name_var).pack(fill='x', pady=2)
+
+        # Password
+        ttk.Label(form_frame, text=self.lang.get_text("password"), width=20).pack(anchor='w', pady=2)
+        password_var = tk.StringVar()
+        ttk.Entry(form_frame, textvariable=password_var, show='*').pack(fill='x', pady=2)
+
+        # Role
+        ttk.Label(form_frame, text=self.lang.get_text("role"), width=20).pack(anchor='w', pady=2)
+        role_var = tk.StringVar()
+        roles = ['admin', 'doctor', 'staff', 'receptionist']
+        ttk.Combobox(form_frame, textvariable=role_var, values=roles, state='readonly').pack(fill='x', pady=2)
+
+        # Email
+        ttk.Label(form_frame, text=self.lang.get_text("email"), width=20).pack(anchor='w', pady=2)
+        email_var = tk.StringVar()
+        ttk.Entry(form_frame, textvariable=email_var).pack(fill='x', pady=2)
+
+        # Phone
+        ttk.Label(form_frame, text=self.lang.get_text("phone"), width=20).pack(anchor='w', pady=2)
+        phone_var = tk.StringVar()
+        ttk.Entry(form_frame, textvariable=phone_var).pack(fill='x', pady=2)
+
+        def save_user():
+            try:
+                user_data = {
+                    'username': username_var.get(),
+                    'full_name': name_var.get(),
+                    'password': password_var.get(),
+                    'role': role_var.get(),
+                    'email': email_var.get(),
+                    'phone': phone_var.get(),
+                    'created_at': datetime.now()
+                }
+
+                self.db.add_user(user_data)
+                messagebox.showinfo("Success", self.lang.get_text("user_added"))
+                dialog.destroy()
+                self.refresh_users_list()
+
+            except Exception as e:
+                logger.error(f"Error adding user: {e}")
+                messagebox.showerror("Error", self.lang.get_text("error_adding_user"))
+
+        # Buttons
+        buttons_frame = ttk.Frame(form_frame)
+        buttons_frame.pack(fill='x', pady=20)
+
+        ttk.Button(
+            buttons_frame,
+            text=self.lang.get_text("save"),
+            command=save_user
+        ).pack(side='right', padx=5)
+
+        ttk.Button(
+            buttons_frame,
+            text=self.lang.get_text("cancel"),
+            command=dialog.destroy
+        ).pack(side='right', padx=5)
+
+    def show_categories_dialog(self):
+        """Show dialog to manage service categories"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(self.lang.get_text("manage_categories"))
+        dialog.geometry("500x600")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Categories list
+        list_frame = ttk.Frame(dialog)
+        list_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        columns = ('name', 'services_count')
+        categories_tree = ttk.Treeview(list_frame, columns=columns, show='headings')
+        categories_tree.heading('name', text=self.lang.get_text("category_name"))
+        categories_tree.heading('services_count', text=self.lang.get_text("services_count"))
+        categories_tree.pack(fill='both', expand=True)
+
+        # Load categories
+        self.load_categories(categories_tree)
+
+        # Add category frame
+        add_frame = ttk.Frame(dialog)
+        add_frame.pack(fill='x', padx=20, pady=10)
+
+        ttk.Label(add_frame, text=self.lang.get_text("category_name"), width=20).pack(side='left')
+        name_var = tk.StringVar()
+        ttk.Entry(add_frame, textvariable=name_var).pack(side='left', fill='x', expand=True, padx=5)
+
+        def add_category():
+            try:
+                category_name = name_var.get().strip()
+                if category_name:
+                    self.db.add_service_category({'name': category_name})
+                    self.load_categories(categories_tree)
+                    name_var.set('')
+                else:
+                    messagebox.showwarning("Warning", self.lang.get_text("enter_category_name"))
+            except Exception as e:
+                logger.error(f"Error adding category: {e}")
+                messagebox.showerror("Error", self.lang.get_text("error_adding_category"))
+
+        ttk.Button(
+            add_frame,
+            text=self.lang.get_text("add"),
+            command=add_category
+        ).pack(side='left', padx=5)
+
+    def show_commission_dialog(self):
+        """Show dialog to set commission rates"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(self.lang.get_text("set_commission"))
+        dialog.geometry("600x700")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Commission settings
+        settings_frame = ttk.Frame(dialog)
+        settings_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # Staff selection
+        staff_frame = ttk.Frame(settings_frame)
+        staff_frame.pack(fill='x', pady=10)
+
+        ttk.Label(staff_frame, text=self.lang.get_text("staff_member"), width=20).pack(side='left')
+        staff_var = tk.StringVar()
+        staff_combo = ttk.Combobox(staff_frame, textvariable=staff_var, state='readonly')
+        staff_combo.pack(side='left', fill='x', expand=True)
+
+        # Load staff members
+        staff_members = self.db.get_all_staff()
+        staff_combo['values'] = [member.name for member in staff_members]
+
+        # Service selection
+        service_frame = ttk.Frame(settings_frame)
+        service_frame.pack(fill='x', pady=10)
+
+        ttk.Label(service_frame, text=self.lang.get_text("service"), width=20).pack(side='left')
+        service_var = tk.StringVar()
+        service_combo = ttk.Combobox(service_frame, textvariable=service_var, state='readonly')
+        service_combo.pack(side='left', fill='x', expand=True)
+
+        # Load services
+        services = self.db.get_all_services()
+        service_combo['values'] = [service.name for service in services]
+
+        # Commission rate
+        rate_frame = ttk.Frame(settings_frame)
+        rate_frame.pack(fill='x', pady=10)
+
+        ttk.Label(rate_frame, text=self.lang.get_text("commission_rate"), width=20).pack(side='left')
+        rate_var = tk.StringVar()
+        ttk.Entry(rate_frame, textvariable=rate_var).pack(side='left')
+        ttk.Label(rate_frame, text="%").pack(side='left')
+
+        def save_commission():
+            try:
+                if not all([staff_var.get(), service_var.get(), rate_var.get()]):
+                    messagebox.showwarning("Warning", self.lang.get_text("fill_all_fields"))
+                    return
+
+                commission_data = {
+                    'staff_name': staff_var.get(),
+                    'service_name': service_var.get(),
+                    'rate': float(rate_var.get()),
+                    'created_at': datetime.now()
+                }
+
+                self.db.set_commission_rate(commission_data)
+                messagebox.showinfo("Success", self.lang.get_text("commission_saved"))
+                dialog.destroy()
+                self.refresh_commission_rates()
+
+            except ValueError:
+                messagebox.showerror("Error", self.lang.get_text("invalid_rate"))
+            except Exception as e:
+                logger.error(f"Error setting commission: {e}")
+                messagebox.showerror("Error", self.lang.get_text("error_setting_commission"))
+
+        # Buttons
+        buttons_frame = ttk.Frame(settings_frame)
+        buttons_frame.pack(fill='x', pady=20)
+
+        ttk.Button(
+            buttons_frame,
+            text=self.lang.get_text("save"),
+            command=save_commission
+        ).pack(side='right', padx=5)
+
+        ttk.Button(
+            buttons_frame,
+            text=self.lang.get_text("cancel"),
+            command=dialog.destroy
+        ).pack(side='right', padx=5)
+
+    def select_backup_location(self):
+        """Show dialog to select backup location"""
+        from tkinter import filedialog
+
+        directory = filedialog.askdirectory(
+            title=self.lang.get_text("select_backup_location"),
+            initialdir=os.path.expanduser("~")
+        )
+
+        if directory:
+            self.backup_path_var.set(directory)
+
+    def save_settings(self):
+        """Save all settings to database"""
+        try:
+            # Save company information
+            company_data = {
+                field: var.get()
+                for field, var in self.company_vars.items()
+            }
+            self.db.update_company_info(company_data)
+
+            # Save backup settings
+            backup_settings = {
+                'location': self.backup_path_var.get(),
+                'schedule': self.backup_schedule_var.get()
+            }
+            self.db.update_backup_settings(backup_settings)
+
+            messagebox.showinfo("Success", self.lang.get_text("settings_saved"))
+
+        except Exception as e:
+            logger.error(f"Error saving settings: {e}")
+            messagebox.showerror("Error", self.lang.get_text("error_saving_settings"))
+
+    def refresh_users_list(self):
+        """Refresh users list in settings"""
+        try:
+            users = self.db.get_all_users()
+            self.users_tree.delete(*self.users_tree.get_children())
+
+            for user in users:
+                self.users_tree.insert('', 'end', values=(
+                    user.username,
+                    user.role,
+                    'Active' if user.active else 'Inactive'
+                ))
+        except Exception as e:
+            logger.error(f"Error refreshing users list: {e}")
+
+    def load_categories(self, tree):
+        """Load service categories into tree"""
+        try:
+            categories = self.db.get_service_categories()
+            tree.delete(*tree.get_children())
+
+            for category in categories:
+                services_count = self.db.count_services_in_category(category.id)
+                tree.insert('', 'end', values=(
+                    category.name,
+                    services_count
+                ))
+        except Exception as e:
+            logger.error(f"Error loading categories: {e}")
+
+    def refresh_commission_rates(self):
+        """Refresh commission rates display"""
+        try:
+            rates = self.db.get_commission_rates()
+            self.commission_tree.delete(*self.commission_tree.get_children())
+
+            for rate in rates:
+                self.commission_tree.insert('', 'end', values=(
+                    rate.service_name,
+                    rate.staff_name,
+                    f"{rate.rate}%"
+                ))
+        except Exception as e:
+            logger.error(f"Error refreshing commission rates: {e}")
+
     def setup_settings_tab(self):
         """Setup settings and configuration tab"""
         # Create notebook for settings categories
