@@ -2202,7 +2202,9 @@ class BeautyClinicPOS:
         for field_id, label in company_fields:
             frame = ttk.Frame(company_frame)
             frame.pack(fill='x', padx=5, pady=2)
-            ttk.Label(frame, text=self.lang.get_text(label)).pack(side='left', width=100)
+            # Fix: Create a fixed-width label using label width instead of pack width
+            label_widget = ttk.Label(frame, text=self.lang.get_text(label), width=20)
+            label_widget.pack(side='left')
             var = tk.StringVar()
             ttk.Entry(frame, textvariable=var).pack(side='left', fill='x', expand=True)
             self.company_vars[field_id] = var
