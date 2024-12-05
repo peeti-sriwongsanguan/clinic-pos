@@ -1429,7 +1429,7 @@ class BeautyClinicPOS:
         return sum(item.price * item.quantity for item in self.cart_items)
 
     def setup_treatments_tab(self):
-        """Setup treatments tracking tab with scrollable notes"""
+        """Setup treatments tracking tab"""
         # Create main containers
         left_frame = ttk.Frame(self.treatments_tab)
         left_frame.pack(side='left', fill='both', expand=True, padx=5, pady=5)
@@ -1437,26 +1437,78 @@ class BeautyClinicPOS:
         right_frame = ttk.Frame(self.treatments_tab)
         right_frame.pack(side='right', fill='both', expand=True, padx=5, pady=5)
 
-        # [Previous left side code remains the same]
+        # Left side - Patient Selection and History
+        # Patient Search
+        search_frame = ttk.LabelFrame(left_frame, text=self.lang.get_text("search_patient"))
+        search_frame.pack(fill='x', padx=5, pady=5)
 
-        # Right side - Treatment Details with scrollbar
+        self.treatment_patient_search = ttk.Entry(search_frame)
+        self.treatment_patient_search.pack(fill='x', padx=5, pady=5)
+        self.treatment_patient_search.bind('<KeyRelease>', self.search_treatment_patient)
+
+        # Treatment History
+        history_frame = ttk.LabelFrame(left_frame, text=self.lang.get_text("treatment_history"))
+        history_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Treatment history tree
+        columns = ('date', 'service', 'doctor', 'status')
+        self.treatment_history_tree = ttk.Treeview(
+            history_frame,
+            columns=columns,
+            show='headings'
+        )
+
+        # Configure columns
+        self.treatment_history_tree.heading('date', text=self.lang.get_text("date"))
+        self.treatment_history_tree.heading('service', text=self.lang.get_text("service"))
+        self.treatment_history_tree.heading('doctor', text=self.lang.get_text("doctor"))
+        self.treatment_history_tree.heading('status', text=self.lang.get_text("status"))
+
+        self.treatment_history_tree.pack(fill='both', expand=True, padx=5, pady=5)
+        self.treatment_history_tree.bind('<<TreeviewSelect>>', self.load_treatment_details)
+
+        # Right side - Treatment Details
         details_frame = ttk.LabelFrame(right_frame, text=self.lang.get_text("treatment_details"))
         details_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
         # Create scrollable frame for details
         scrollable_details = self.create_scrollable_frame(details_frame)
 
-        # Photos frame
+        # Before/After Photos
         photos_frame = ttk.Frame(scrollable_details)
         photos_frame.pack(fill='x', padx=5, pady=5)
 
-        # [Previous photos frame code remains the same]
+        # Before photo
+        before_frame = ttk.LabelFrame(photos_frame, text=self.lang.get_text("before"))
+        before_frame.pack(side='left', fill='both', expand=True, padx=5)
 
-        # Treatment Notes with scrollable text widgets
+        self.before_photo_label = ttk.Label(before_frame, text="No photo")
+        self.before_photo_label.pack(padx=5, pady=5)
+
+        ttk.Button(
+            before_frame,
+            text=self.lang.get_text("add_photo"),
+            command=lambda: self.add_treatment_photo("before")
+        ).pack(padx=5, pady=5)
+
+        # After photo
+        after_frame = ttk.LabelFrame(photos_frame, text=self.lang.get_text("after"))
+        after_frame.pack(side='right', fill='both', expand=True, padx=5)
+
+        self.after_photo_label = ttk.Label(after_frame, text="No photo")
+        self.after_photo_label.pack(padx=5, pady=5)
+
+        ttk.Button(
+            after_frame,
+            text=self.lang.get_text("add_photo"),
+            command=lambda: self.add_treatment_photo("after")
+        ).pack(padx=5, pady=5)
+
+        # Treatment Notes
         notes_frame = ttk.LabelFrame(scrollable_details, text=self.lang.get_text("treatment_notes"))
         notes_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
-        # Notes sections with individual scrollbars
+        # Notes sections
         sections = [
             ('chief_complaint', 3),
             ('diagnosis', 3),
@@ -1476,29 +1528,29 @@ class BeautyClinicPOS:
                 text=self.lang.get_text(f"treatment_{section}")
             ).pack(anchor='w')
 
-            # Create frame for text and scrollbar
-            text_frame = ttk.Frame(section_frame)
-            text_frame.pack(fill='x', pady=2)
-
             # Create text widget with scrollbar
-            text_widget = tk.Text(text_frame, height=height)
-            scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
+            text_container = ttk.Frame(section_frame)
+            text_container.pack(fill='x', pady=2)
+
+            text_widget = tk.Text(text_container, height=height)
+            scrollbar = ttk.Scrollbar(text_container, orient="vertical", command=text_widget.yview)
             text_widget.configure(yscrollcommand=scrollbar.set)
 
-            # Pack scrollbar and text widget
             scrollbar.pack(side="right", fill="y")
             text_widget.pack(side="left", fill="x", expand=True)
 
             self.treatment_note_widgets[section] = text_widget
-            submit_frame = ttk.Frame(right_frame)
-            submit_frame.pack(fill='x', padx=5, pady=10)
 
-            ttk.Button(
-                submit_frame,
-                text=self.lang.get_text("submit_treatment"),
-                command=self.submit_treatment,
-                style="Accent.TButton"  # Use accent style for emphasis
-            ).pack(side='right', padx=5)
+        # Single submit button at the bottom of the right frame
+        submit_frame = ttk.Frame(right_frame)
+        submit_frame.pack(fill='x', padx=5, pady=10)
+
+        ttk.Button(
+            submit_frame,
+            text=self.lang.get_text("submit_treatment"),
+            command=self.submit_treatment,
+            style="Accent.TButton"
+        ).pack(side='right', padx=5)
 
     def submit_treatment(self):
         """Handle treatment submission"""
