@@ -7,10 +7,10 @@ from decimal import Decimal
 import logging
 
 from app.gui.theme_config import ThemeConfig
+from app.utils.language_manager import LanguageManager
 from app.utils.invoice_generator import InvoiceGenerator
 from app.database.db_manager import DatabaseManager
 from app.database.model import Patient, Service, Transaction, TransactionItem
-
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +22,7 @@ class BeautyClinicPOS:
         try:
             logger.debug("Initializing database connection...")
             self.db = DatabaseManager()
+            self.lang = LanguageManager(self.db)  # Add this line
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             messagebox.showerror("Database Error",
@@ -36,6 +37,7 @@ class BeautyClinicPOS:
             # Initialize other components
             self.invoice_generator = InvoiceGenerator()
             self.setup_window()
+            self.setup_header()  # Add this line
             self.setup_branding()
             self.create_styles()
             self.setup_gui()
@@ -438,6 +440,25 @@ class BeautyClinicPOS:
 
     def create_styles(self):
         style = ttk.Style()
+
+        # Add new styles
+        style.configure(
+            "Header.TFrame",
+            background=ThemeConfig.WHITE
+        )
+
+        style.configure(
+            "ClinicName.TLabel",
+            background=ThemeConfig.WHITE,
+            font=ThemeConfig.TITLE_FONT,
+            foreground=ThemeConfig.DARK_PINK
+        )
+
+        style.configure(
+            "Header.TLabel",
+            background=ThemeConfig.WHITE,
+            font=ThemeConfig.MAIN_FONT
+        )
 
         # Configure main theme
         style.configure(
