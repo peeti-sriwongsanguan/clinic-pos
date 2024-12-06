@@ -38,6 +38,11 @@ class DatabaseManager:
         cursor = self.conn.cursor()
 
         try:
+            # First drop existing tables if they exist to ensure clean state
+            tables = ['doctor_notes', 'patient_photos', 'patients']
+            for table in tables:
+                cursor.execute(f'DROP TABLE IF EXISTS {table}')
+
             # Patients table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS patients (
@@ -51,8 +56,8 @@ class DatabaseManager:
                     emergency_contact TEXT,
                     medical_history TEXT,
                     notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP
                 )
             ''')
 
@@ -65,7 +70,7 @@ class DatabaseManager:
                     progress_notes TEXT,
                     recommendations TEXT,
                     next_steps TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
                     FOREIGN KEY (patient_id) REFERENCES patients(id)
                 )
             ''')
@@ -77,7 +82,7 @@ class DatabaseManager:
                     patient_id TEXT NOT NULL,
                     photo_path TEXT NOT NULL,
                     photo_type TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
                     FOREIGN KEY (patient_id) REFERENCES patients(id)
                 )
             ''')
@@ -89,6 +94,52 @@ class DatabaseManager:
             logger.error(f"Error creating tables: {e}")
             self.conn.rollback()
             raise
+
+    def get_patient(self, patient_id):
+        """Get patient by ID"""
+        logger.debug(f"Getting patient by ID: {patient_id}")
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT id, name, phone, email, address, birth_date,
+                       gender, emergency_contact, medical_history, notes,
+                       created_at, updated_at
+                FROM patients 
+                WHERE id = ?
+            ''', (patient_id,))
+            row = cursor.fetchone()
+            if row:
+                patient_dict = dict(row)
+                logger.debug(f"Found patient: {patient_dict['name']}")
+                return patient_dict
+            logger.debug("Patient not found")
+            return None
+
+        except Exception as e:
+            logger.error(f"Error getting patient: {e}")
+            return None
+
+    def delete_patient(self, patient_id):
+        """Delete a patient from the database"""
+        logger.debug(f"Deleting patient with ID: {patient_id}")
+        try:
+            cursor = self.conn.cursor()
+
+            # First delete associated records
+            cursor.execute("DELETE FROM doctor_notes WHERE patient_id = ?", (patient_id,))
+            cursor.execute("DELETE FROM patient_photos WHERE patient_id = ?", (patient_id,))
+
+            # Then delete patient
+            cursor.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
+
+            self.conn.commit()
+            logger.debug("Patient deleted successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error deleting patient: {e}")
+            self.conn.rollback()
+            return False
 
     def initialize_test_data(self):
         """Initialize database with test data if empty"""
@@ -198,65 +249,7 @@ class DatabaseManager:
                 logging.error(f"Error initializing database: {str(e)}")
                 raise
 
-    def add_patient(self, patient_data):
-        """Add a new patient to the database
-        Args:
-            patient_data (dict): Dictionary containing patient information
-        Returns:
-            str: ID of the newly created patient
-        """
-        logger.debug(f"Adding new patient: {patient_data}")
-        try:
-            cursor = self.conn.cursor()
 
-            # Execute the insert
-            cursor.execute('''
-                INSERT INTO patients (
-                    id, name, phone, email, address,
-                    birth_date, gender, emergency_contact,
-                    medical_history, notes, created_at,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                patient_data['id'],
-                patient_data['name'],
-                patient_data['phone'],
-                patient_data['email'],
-                patient_data['address'],
-                patient_data['birth_date'],
-                patient_data['gender'],
-                patient_data['emergency_contact'],
-                patient_data['medical_history'],
-                patient_data['notes'],
-                patient_data['created_at'],
-                patient_data['updated_at']
-            ))
-
-            # Add initial doctor notes if medical history exists
-            if patient_data.get('medical_history'):
-                notes_id = str(uuid.uuid4())
-                cursor.execute('''
-                    INSERT INTO doctor_notes (
-                        id, patient_id, medical_history,
-                        created_at
-                    ) VALUES (?, ?, ?, ?)
-                ''', (
-                    notes_id,
-                    patient_data['id'],
-                    patient_data['medical_history'],
-                    patient_data['created_at']
-                ))
-
-            # Commit the transaction
-            self.conn.commit()
-            logger.info(f"Successfully added patient with ID: {patient_data['id']}")
-
-            return patient_data['id']
-
-        except Exception as e:
-            logger.error(f"Error adding patient: {e}")
-            self.conn.rollback()
-            raise
 
     # Patient management methods
     # def add_patient(self, patient: Patient) -> str:
@@ -277,15 +270,7 @@ class DatabaseManager:
     #         ))
     #         return patient_id
 
-    def get_patient(self, patient_id: str) -> Optional[Patient]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            result = cursor.execute(
-                'SELECT * FROM patients WHERE id = ?',
-                (patient_id,)
-            )
-            row = result.fetchone()
-            return Patient(**dict(row)) if row else None
+
 
     def get_patient_last_visit(self, patient_id):
         """Get patient's last visit date"""
@@ -320,6 +305,8 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"DB: Error getting last visit: {e}")
             return None
+
+
 
     # Service management methods
     def add_service(self, service: Service) -> str:
@@ -464,91 +451,140 @@ class DatabaseManager:
             result = cursor.execute('SELECT * FROM staff WHERE active = 1')
             return [Staff(**dict(row)) for row in result.fetchall()]
 
-    def get_all_patients(self) -> List[Patient]:
+    def get_all_patients(self):
         """Retrieve all patients from the database"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                result = cursor.execute('''
-                    SELECT * FROM patients 
-                    ORDER BY name ASC
-                ''')
-                return [Patient(**dict(row)) for row in result.fetchall()]
-            except Exception as e:
-                logging.error(f"Error retrieving patients: {e}")
-                return []
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT id, name, phone, email, address, birth_date,
+                       gender, emergency_contact, medical_history, notes,
+                       created_at, updated_at
+                FROM patients 
+                ORDER BY name ASC
+            ''')
 
-    def add_patient(self, patient: Patient) -> str:
-        """Add a new patient to the database"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                patient_id = str(uuid.uuid4())
-                cursor.execute('''
-                    INSERT INTO patients (
-                        id, name, phone, email, address, created_at,
-                        medical_history, notes, birth_date, gender,
-                        emergency_contact
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    patient_id,
-                    patient.name,
-                    patient.phone,
-                    patient.email,
-                    patient.address,
-                    patient.created_at,
-                    patient.medical_history,
-                    patient.notes,
-                    patient.birth_date,
-                    patient.gender,
-                    patient.emergency_contact
-                ))
-                logging.info(f"Added new patient with ID: {patient_id}")
-                return patient_id
-            except Exception as e:
-                logging.error(f"Error adding patient: {e}")
-                raise
+            rows = cursor.fetchall()
+            patients = []
 
-    def update_patient(self, patient: Patient) -> bool:
-        """Update an existing patient's information"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                cursor.execute('''
-                    UPDATE patients 
-                    SET name = ?, phone = ?, email = ?, address = ?,
-                        medical_history = ?, notes = ?, birth_date = ?,
-                        gender = ?, emergency_contact = ?
-                    WHERE id = ?
-                ''', (
-                    patient.name,
-                    patient.phone,
-                    patient.email,
-                    patient.address,
-                    patient.medical_history,
-                    patient.notes,
-                    patient.birth_date,
-                    patient.gender,
-                    patient.emergency_contact,
-                    patient.id
-                ))
-                logging.info(f"Updated patient with ID: {patient.id}")
-                return True
-            except Exception as e:
-                logging.error(f"Error updating patient: {e}")
-                return False
+            for row in rows:
+                # Convert row to dictionary
+                patient_dict = dict(row)
+                logger.debug(f"Processing patient: {patient_dict['name']}")
+                patients.append(patient_dict)
 
-    def delete_patient(self, patient_id: str) -> bool:
-        """Delete a patient from the database"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                cursor.execute('DELETE FROM patients WHERE id = ?', (patient_id,))
-                logging.info(f"Deleted patient with ID: {patient_id}")
-                return True
-            except Exception as e:
-                logging.error(f"Error deleting patient: {e}")
-                return False
+            logger.debug(f"Retrieved {len(patients)} patients")
+            return patients
+
+        except Exception as e:
+            logger.error(f"Error retrieving patients: {e}")
+            return []
+
+    def add_patient(self, data):
+        """
+        Add a new patient to the database
+        Args:
+            data (dict): Dictionary containing patient information
+        Returns:
+            str: The ID of the newly created patient
+        """
+        logger.debug(f"Adding new patient: {data}")
+        try:
+            cursor = self.conn.cursor()
+            query = """
+                INSERT INTO patients (
+                    id, name, phone, email, address,
+                    birth_date, gender, emergency_contact,
+                    medical_history, notes, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?
+                )
+            """
+
+            values = [
+                data['id'],
+                data['name'],
+                data['phone'],
+                data.get('email', ''),
+                data.get('address', ''),
+                data.get('birth_date', ''),
+                data.get('gender', ''),
+                data.get('emergency_contact', ''),
+                data.get('medical_history', ''),
+                data.get('notes', ''),
+                data['created_at'],
+                data['updated_at']
+            ]
+
+            logger.debug(f"Executing query with values: {values}")
+            cursor.execute(query, values)
+
+            if data.get('medical_history'):
+                notes_query = """
+                    INSERT INTO doctor_notes (
+                        id, patient_id, medical_history, created_at
+                    ) VALUES (?, ?, ?, ?)
+                """
+                notes_values = [
+                    str(uuid.uuid4()),
+                    data['id'],
+                    data['medical_history'],
+                    data['created_at']
+                ]
+                cursor.execute(notes_query, notes_values)
+
+            self.conn.commit()
+            logger.info(f"Successfully added patient with ID: {data['id']}")
+            return data['id']
+
+        except Exception as e:
+            logger.error(f"Error in add_patient: {str(e)}", exc_info=True)
+            self.conn.rollback()
+            raise
+
+    def update_patient(self, patient_data):
+        """Update patient information"""
+        logger.debug(f"Updating patient: {patient_data['id']}")
+        try:
+            cursor = self.conn.cursor()
+
+            cursor.execute('''
+                UPDATE patients 
+                SET name = ?, 
+                    phone = ?,
+                    email = ?,
+                    address = ?,
+                    birth_date = ?,
+                    gender = ?,
+                    emergency_contact = ?,
+                    medical_history = ?,
+                    notes = ?,
+                    updated_at = ?
+                WHERE id = ?
+            ''', (
+                patient_data['name'],
+                patient_data['phone'],
+                patient_data.get('email', ''),
+                patient_data.get('address', ''),
+                patient_data.get('birth_date', ''),
+                patient_data.get('gender', ''),
+                patient_data.get('emergency_contact', ''),
+                patient_data.get('medical_history', ''),
+                patient_data.get('notes', ''),
+                patient_data['updated_at'],
+                patient_data['id']
+            ))
+
+            self.conn.commit()
+            logger.debug(f"Patient updated successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating patient: {e}")
+            self.conn.rollback()
+            return False
+
 
     def search_patients(self, search_term):
         """Search patients by name or phone number"""

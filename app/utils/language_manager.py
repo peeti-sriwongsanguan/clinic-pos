@@ -49,14 +49,52 @@ class LanguageManager:
         return {
             'en': {
                 'app_name': 'Beauty Clinic POS',
-                'patient': 'Patient',
+                'language': 'Language',
+                'patients': 'Patients',
+                'doctor_notes': 'Doctor Notes',
+                'clinic_name': 'Wellness by BFF',
                 'doctor': 'Doctor',
+                "search": "Search",
+                "add_new_patient": "Add New Patient",
+                "edit_patient": "Edit Patient",
+                "delete_patient": "Delete Patient",
+                "refresh": "Refresh",
+                'name': 'Name',
+                'phone': 'Phone',
+                'email': 'Email',
+                'last_visit': 'Last Visit',
+                'notes': 'Notes',
+                'save': 'Save',
+                'cancel': 'Cancel',
+                'medical_history': 'Medical History',
+                'error_loading_patient': 'Error loading patient data',
+                'patient_not_found': 'Patient not found',
+                'select_patient_to_edit': 'Please select a patient to edit'
                 # Add more default translations
             },
             'th': {
                 'app_name': 'ระบบคลินิกความงาม',
-                'patient': 'ผู้ป่วย',
+                'language': 'ภาษา',
+                'patients': 'ผู้ป่วย',
+                'doctor_notes': 'บันทึกแพทย์',
+                'clinic_name': 'เวลเนส บาย บีเอฟเอฟ',
                 'doctor': 'แพทย์',
+                "search": "ค้นหา",
+                "add_new_patient": "เพิ่มผู้ป่วยใหม่",
+                "edit_patient": "แก้ไขข้อมูลผู้ป่วย",
+                "delete_patient": "ลบข้อมูลผู้ป่วย",
+                "refresh": "รีเฟรช",
+                'name': 'ชื่อ',
+                'phone': 'โทรศัพท์',
+                'email': 'อีเมล',
+                'last_visit': 'เข้ารับการรักษาล่าสุด',
+                'notes': 'บันทึก',
+                'save': 'บันทึก',
+                'cancel': 'ยกเลิก',
+                'medical_history': 'ประวัติการรักษา',
+                'error_loading_patient': 'เกิดข้อผิดพลาดในการโหลดข้อมูลผู้ป่วย',
+                'patient_not_found': 'ไม่พบข้อมูลผู้ป่วย',
+                'select_patient_to_edit': 'กรุณาเลือกผู้ป่วยที่ต้องการแก้ไข'
                 # Add more default translations
             }
         }
@@ -65,8 +103,10 @@ class LanguageManager:
         """Change current language"""
         if language_code in self.translations:
             self.current_language = language_code
+            return True
         else:
             logging.error(f"Unsupported language: {language_code}")
+            return False
 
     def get_text(self, key: str, default: Optional[str] = None) -> str:
         """Get translated text for a key"""

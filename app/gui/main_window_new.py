@@ -105,6 +105,8 @@ class BeautyClinicPOS:
         left_frame = ttk.Frame(header_frame)
         left_frame.pack(side='left', fill='y')
 
+
+
         try:
             logo_path = os.path.join('static', 'assets', 'logo.jpeg')
             logo_img = Image.open(logo_path)
@@ -126,17 +128,24 @@ class BeautyClinicPOS:
         lang_frame = ttk.Frame(right_frame)
         lang_frame.pack(side='right', padx=10)
 
-        ttk.Label(
+        self.lang_label = ttk.Label(
             lang_frame,
             text=self.lang.get_text("language"),
             style='Header.TLabel'
-        ).pack(side='left')
+        )
+        self.lang_label.pack(side='left')
 
-        self.lang_var = tk.StringVar(value='en')
+        # Language dropdown with proper values
+        self.language_var = tk.StringVar(value=self.lang.current_language)  # Use current language
+        lang_options = {
+            'en': 'English',
+            'th': 'ไทย'
+        }
+
         lang_combo = ttk.Combobox(
             lang_frame,
-            textvariable=self.lang_var,
-            values=['en', 'th'],
+            textvariable=self.language_var,
+            values=list(lang_options.keys()),
             state='readonly',
             width=10
         )
@@ -198,38 +207,96 @@ class BeautyClinicPOS:
         self.notebook.pack(expand=True, fill='both', padx=10, pady=5)
 
         # Create tab frames
-        self.doctor_notes_tab = ttk.Frame(self.notebook)
-        self.patients_tab = ttk.Frame(self.notebook)
-        # self.reports_tab = ttk.Frame(self.notebook)
+        self.patients_frame = ttk.Frame(self.notebook)
+        self.doctor_notes_frame = ttk.Frame(self.notebook)
 
-        # Add tabs with language support
-        self.notebook.add(self.doctor_notes_tab, text=self.lang.get_text("doctor_notes"))
-        self.notebook.add(self.patients_tab, text=self.lang.get_text("patients"))
-        # self.notebook.add(self.reports_tab, text=self.lang.get_text("reports"))
+        # Initialize tab contents with proper class instances
+        self.patients = PatientsTab(self.patients_frame, self.db, self.lang)
+        self.doctor_notes = DoctorNotesTab(self.doctor_notes_frame, self.db, self.lang)
 
-        # Initialize tab classes
-        self.doctor_notes = DoctorNotesTab(self.doctor_notes_tab, self.db, self.lang)
-        self.patients = PatientsTab(self.patients_tab, self.db, self.lang)
+        # Add tabs with proper references
+        self.notebook.add(self.patients_frame, text=self.lang.get_text("patients"))
+        self.notebook.add(self.doctor_notes_frame, text=self.lang.get_text("doctor_notes"))
 
         # self.reports = ReportsTab(self.reports_tab, self.db, self.lang)
+        # Store references to tab indices
+        self.tab_indices = {
+            'patients': self.notebook.add(self.patients_frame, text=self.lang.get_text("patients")),
+            'doctor_notes': self.notebook.add(self.doctor_notes_frame, text=self.lang.get_text("doctor_notes"))
+        }
 
     def change_language(self, event=None):
-        """Handle language change"""
-        new_lang = self.lang_var.get()
-        self.lang.set_language(new_lang)
-        self.update_ui_texts()
+        """Change the application language"""
+        try:
+            selected_lang = self.language_var.get()
+            logger.debug(f"Changing language to: {selected_lang}")
+
+            # Check if language is supported before changing
+            if selected_lang in ['en', 'th']:
+                self.lang.set_language(selected_lang)
+                self.update_ui_texts()
+                logger.debug(f"Successfully changed language to: {selected_lang}")
+            else:
+                logger.error(f"Unsupported language selected: {selected_lang}")
+                messagebox.showerror(
+                    "Error",
+                    "Selected language is not supported."
+                )
+                # Reset to current language
+                self.language_var.set(self.lang.current_language)
+
+        except Exception as e:
+            logger.error(f"Error changing language: {e}", exc_info=True)
+            messagebox.showerror(
+                "Error",
+                "Failed to change language. Please try again."
+            )
+            # Reset to current language
+            self.language_var.set(self.lang.current_language)
+
+    def set_language(self, language_code: str):
+        """Change current language"""
+        if language_code in self.translations:
+            self.current_language = language_code
+            return True
+        else:
+            logging.error(f"Unsupported language: {language_code}")
+            return False
 
     def update_ui_texts(self):
-        """Update all UI texts after language change"""
-        # Update tab texts
-        self.notebook.tab(0, text=self.lang.get_text("doctor_notes"))
-        self.notebook.tab(0, text=self.lang.get_text("patients"))
-        # self.notebook.tab(1, text=self.lang.get_text("reports"))
+        """Update UI texts when language changes"""
+        try:
+            # Update window title
+            self.root.title(self.lang.get_text("app_name"))
 
-        # Update other UI elements
-        self.doctor_notes.refresh_notes()
-        self.patients.refresh_patient_list()
-        # self.reports.refresh_reports()
+            # Update notebook tab texts
+            if hasattr(self, 'notebook'):
+                self.notebook.tab(self.patients_frame, text=self.lang.get_text("patients"))
+                self.notebook.tab(self.doctor_notes_frame, text=self.lang.get_text("doctor_notes"))
+
+            # Update clinic name
+            if hasattr(self, 'clinic_name'):
+                self.clinic_name.configure(text=self.lang.get_text("clinic_name"))
+
+            # Update language label
+            if hasattr(self, 'lang_label'):
+                self.lang_label.configure(text=self.lang.get_text("language"))
+
+            # Update patients tab
+            if hasattr(self, 'patients'):
+                if hasattr(self.patients, 'update_ui_text'):
+                    self.patients.update_ui_text()
+
+            # Update doctor notes tab
+            if hasattr(self, 'doctor_notes'):
+                if hasattr(self.doctor_notes, 'refresh_notes'):
+                    self.doctor_notes.refresh_notes()
+
+            logger.debug("Successfully updated UI texts for language change")
+
+        except Exception as e:
+            logger.error(f"Error updating UI texts: {e}", exc_info=True)
+
 
     def run(self):
         """Start the application"""

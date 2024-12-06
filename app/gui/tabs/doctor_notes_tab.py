@@ -42,6 +42,36 @@ class DoctorNotesTab(ttk.Frame):
         # Create buttons
         self.setup_action_buttons(right_frame)
 
+    def refresh_notes(self):
+        """Refresh doctor notes tab display and translations"""
+        try:
+            # Refresh labels and button texts
+            if hasattr(self, 'search_label'):
+                self.search_label.config(text=self.lang.get_text("search"))
+
+            if hasattr(self, 'patient_list'):
+                # Refresh column headings
+                self.patient_list.heading('name', text=self.lang.get_text("name"))
+                self.patient_list.heading('phone', text=self.lang.get_text("phone"))
+                self.patient_list.heading('last_visit', text=self.lang.get_text("last_visit"))
+
+            # Refresh any buttons
+            for widget in self.parent.winfo_children():
+                if isinstance(widget, ttk.Button):
+                    if 'search' in str(widget):
+                        widget.config(text=self.lang.get_text("search"))
+                    elif 'add' in str(widget):
+                        widget.config(text=self.lang.get_text("add_new_patient"))
+
+            # Refresh current search results if any
+            if hasattr(self, 'patient_search_var'):
+                search_term = self.patient_search_var.get()
+                if search_term and len(search_term) >= 2:
+                    self.on_patient_search()
+
+        except Exception as e:
+            logger.error(f"Error refreshing doctor notes: {e}", exc_info=True)
+
     def setup_patient_selection(self, parent):
         """Setup patient selection section"""
         # Patient Selection Frame
@@ -914,3 +944,4 @@ class DoctorNotesTab(ttk.Frame):
         except Exception as e:
             logger.error(f"Error generating PDF: {e}")
             raise
+
